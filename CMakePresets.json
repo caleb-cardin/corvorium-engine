@@ -37,8 +37,7 @@
       },
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_C_COMPILER": "gcc"
+        "CMAKE_CXX_COMPILER": "g++"
       }
     },
     {
@@ -48,8 +47,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "cl.exe",
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_FLAGS": "/MDd /Od /DDEBUG /D_UTF8 /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
+        "CMAKE_CXX_FLAGS": "/Zc:preprocessor /Zc:__cplusplus /MDd /Od /DDEBUG /D_UTF8 /std:c++latest /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
       }
     },
     {
@@ -59,8 +57,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_CXX_COMPILER": "cl.exe",
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_FLAGS": "/MDd /O1 /DDEBUG /D_UTF8 /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
+        "CMAKE_CXX_FLAGS": "/Zc:preprocessor /Zc:__cplusplus /MDd /O1 /DDEBUG /D_UTF8 /std:c++latest /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
       }
     },
     {
@@ -70,8 +67,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "cl.exe",
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_FLAGS": "/MD /O2 /DDEBUG /D_UTF8 /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
+        "CMAKE_CXX_FLAGS": "/Zc:preprocessor /Zc:__cplusplus /MD /O2 /DDEBUG /D_UTF8 /std:c++latest /EHsc- /W4 /permissive- /wd4996 /w14244 /w14265 /w14266 /w14302 /w14310 /w14388 /w14583 /w14640"
       }
     },
     {
@@ -81,7 +77,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++.exe",
-        "CMAKE_C_COMPILER": "clang.exe",
         "CMAKE_CXX_FLAGS": "-O0 -g -DDEBUG -fno-exceptions -std=c++2c -Wall -Wextra -Wpedantic -Walloca -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdeprecated-copy-dtor -Wdouble-promotion -Wenum-conversion -Wextra-semi -Wfloat-equal -Wformat-signedness -Wformat=2 -Wmismatched-tags -Wmissing-braces -Wmultichar -Wnon-virtual-dtor -Woverloaded-virtual -Wpointer-arith -Wrange-loop-construct -Wshadow -Wuninitialized -Wvla -Wwrite-strings"
       }
     },
@@ -93,7 +88,6 @@
         "CXX_SCAN_FOR_MODULES": "1",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_CXX_COMPILER": "clang++.exe",
-        "CMAKE_C_COMPILER": "clang.exe",
         "CMAKE_CXX_FLAGS": "-O2 -g -fno-exceptions -std=c++2c -Wall -Wextra -Wpedantic -Walloca -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdeprecated-copy-dtor -Wdouble-promotion -Wenum-conversion -Wextra-semi -Wfloat-equal -Wformat-signedness -Wformat=2 -Wmismatched-tags -Wmissing-braces -Wmultichar -Wnon-virtual-dtor -Woverloaded-virtual -Wpointer-arith -Wrange-loop-construct -Wshadow -Wuninitialized -Wvla -Wwrite-strings"
       }
     },
@@ -105,7 +99,6 @@
         "CXX_SCAN_FOR_MODULES": "1",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "clang++.exe",
-        "CMAKE_C_COMPILER": "clang.exe",
         "CMAKE_CXX_FLAGS": "-O2 -fno-exceptions -std=c++2c -Wall -Wextra -Wpedantic -Walloca -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdeprecated-copy-dtor -Wdouble-promotion -Wenum-conversion -Wextra-semi -Wfloat-equal -Wformat-signedness -Wformat=2 -Wmismatched-tags -Wmissing-braces -Wmultichar -Wnon-virtual-dtor -Woverloaded-virtual -Wpointer-arith -Wrange-loop-construct -Wshadow -Wuninitialized -Wvla -Wwrite-strings"
       }
     },
