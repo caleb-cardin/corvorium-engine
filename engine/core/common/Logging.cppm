@@ -18,8 +18,6 @@ import :Build;
 import :Debug;
 import :Flags;
 
-
-
 namespace Corvorium {
 export enum class LogLevelBits : u8 {
     Unknown = 0,
@@ -29,15 +27,15 @@ export enum class LogLevelBits : u8 {
     Critical = 0x1 << 4,
     All = 0xF
 };
-export constexpr LogLevelBits Info = LogLevelBits::Info;
-export constexpr LogLevelBits Warning = LogLevelBits::Warning;
-export constexpr LogLevelBits Error = LogLevelBits::Error;
-export constexpr LogLevelBits Critical = LogLevelBits::Critical;
+
+export constexpr auto kInfo = LogLevelBits::Info;
+export constexpr auto kWarning = LogLevelBits::Warning;
+export constexpr auto kError = LogLevelBits::Error;
+export constexpr auto kCritical = LogLevelBits::Critical;
 
 DECLARE_FLAG_TYPE_PRIVATE(LogLevel, LogLevelBits)
 
 namespace Log {
-
 export class Logger {
 public:
     Logger() = delete;
@@ -47,11 +45,12 @@ public:
 
     auto operator->() const -> spdlog::logger*
     {
-        return m_pLogger.get();
+        return pLogger.get();
     }
+
 private:
-    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> m_spSink;
-    std::unique_ptr<spdlog::logger> m_pLogger;
+    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> pSink;
+    std::unique_ptr<spdlog::logger> pLogger;
 };
 
 std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> g_loggersColorSink;
@@ -66,21 +65,21 @@ static auto GetGlobalLoggerSink() -> std::shared_ptr<spdlog::sinks::stdout_color
 }
 
 Logger::Logger(std::string&& Name)
-    : m_spSink{GetGlobalLoggerSink()}
-    , m_pLogger{std::make_unique<spdlog::logger>(std::forward<std::string>(Name), m_spSink)}
+    : pSink{GetGlobalLoggerSink()}
+    , pLogger{std::make_unique<spdlog::logger>(std::forward<std::string>(Name), pSink)}
 {
-    m_pLogger->set_pattern("[%H:%M:%S] [%t] | [%n] %^[- %l -]%$ : %v");
+    pLogger->set_pattern("[%H:%M:%S] [%t] | [%n] %^[- %l -]%$ : %v");
     if constexpr (Build::DebugBuild())
     {
-        m_pLogger->flush_on(spdlog::level::n_levels);
+        pLogger->flush_on(spdlog::level::n_levels);
     }
     if constexpr (Build::DevelopmentBuild())
     {
-        m_pLogger->flush_on(spdlog::level::warn);
+        pLogger->flush_on(spdlog::level::warn);
     }
     if constexpr (Build::ReleaseBuild())
     {
-        m_pLogger->flush_on(spdlog::level::critical);
+        pLogger->flush_on(spdlog::level::critical);
     }
 }
 }

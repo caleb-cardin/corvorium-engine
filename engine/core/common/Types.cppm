@@ -8,7 +8,6 @@ module;
 export module Common:Types;
 
 export namespace Corvorium {
-
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
@@ -23,10 +22,10 @@ using f32 = float;
 using f64 = double;
 
 
-namespace Detail  {
+namespace Detail {
 template<typename T>
 concept Boolean = std::is_convertible_v<T, bool>;
-export using SourceLocation = std::source_location;
-}
 
+using SourceLocation = std::source_location;
+}
 }

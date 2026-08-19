@@ -2,7 +2,6 @@
 find_package(Vulkan REQUIRED COMPONENTS volk)
 
 if (Vulkan_FOUND)
-    message(STATUS "CorvoriumRendering | Vulkan sdk library found : version = ${Vulkan_VERSION}")
 
     find_package (Vulkan REQUIRED)
 

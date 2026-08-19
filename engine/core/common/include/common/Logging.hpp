@@ -23,13 +23,13 @@ do {                                                                            
             return _ret;                                                        \
         }} while (0)
 
-#define CRVM_LOG_CONTINUE_IF(_cond, _logger, _level, _msg, ...)                      \
+#define CRVM_LOG_CONTINUE_IF(_cond, _logger, _level, _msg, ...)                 \
     do{if (_cond){                                                              \
             CRVM_LOG(_logger, _level, _msg __VA_OPT__(,) __VA_ARGS__);          \
             continue;                                                           \
         }} while (0)
 
-#define CRVM_LOG_BREAK_IF(_cond, _logger, _level, _msg, ...)                         \
+#define CRVM_LOG_BREAK_IF(_cond, _logger, _level, _msg, ...)                    \
     do{if (_cond){                                                              \
             CRVM_LOG(_logger, _level, _msg __VA_OPT__(,) __VA_ARGS__);          \
             break;                                                              \

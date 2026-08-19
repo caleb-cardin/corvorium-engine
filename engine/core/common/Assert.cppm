@@ -11,7 +11,7 @@ import :Types;
 import :Logging;
 
 namespace Corvorium {
-static Log::Logger kAssertLogger{"Assert"};
+static Log::Logger AssertLogger{"Assert"};
 }
 
 export namespace Corvorium {
