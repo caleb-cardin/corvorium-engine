@@ -17,11 +17,6 @@ extern Log::Logger VfsLogger;
 static constexpr auto kMountPathDelimiter = "://";
 static constexpr u64 kMountPathDelimiterSize = sizeof("://") - 1;
 
-struct VirtualPathInfo {
-    IVFSBackend* Backend{nullptr};
-    PhysicalPath PhysicalPath{};
-    MountFlags Flags{};
-};
 
 class MountTable {
     using PathPrefix = eastl::string;

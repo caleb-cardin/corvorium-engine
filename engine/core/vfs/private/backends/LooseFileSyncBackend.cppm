@@ -39,7 +39,7 @@ ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) n
                        VfsLogger,
                        kError,
                        "Failed to open file for read: {}",
-                       path.c_str());
+                       path.string());
 
     ByteArray bytes;
     const u64 size = file.tellg();
@@ -50,7 +50,7 @@ ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) n
                        VfsLogger,
                        kError,
                        "Failed to read file : {}",
-                       path.c_str());
+                       path.string());
     return std::move(bytes);
 }
 
@@ -73,7 +73,7 @@ VfsError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArr
                        VfsLogger,
                        kError,
                        "Failed to open file for write: {}",
-                       path.c_str());
+                       path.string());
 
 
     CRVM_LOG_RETURN_IF(!file.write(reinterpret_cast<const char*>(Bytes.data()), Bytes.size()),
@@ -81,7 +81,7 @@ VfsError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArr
                        VfsLogger,
                        kError,
                        "Failed to write file : {}",
-                       path.c_str());
+                       path.string());
 
     return VfsError::Success;
 }

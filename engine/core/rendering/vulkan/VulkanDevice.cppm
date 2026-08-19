@@ -27,7 +27,7 @@ public:
     explicit VulkanDevice(VulkanContext* ParentContext);
     ~VulkanDevice() override = default;
 
-    bool Initialize(const RenderContext& Context) override;
+    bool Initialize() override;
     void Shutdown() override;
 
     bool CreateSwapchainForWindow(OS::Window* InWindow);
@@ -45,7 +45,7 @@ private:
 
     vk::PipelineCache PipelineCache;
 
-    void SelectPhysicalDevice(const VulkanContext& Context);
+    void SelectPhysicalDevice();
     void InitDevice();
     void InitPipelineCache();
 
@@ -59,11 +59,9 @@ VulkanDevice::VulkanDevice(VulkanContext* ParentContext)
     : Context{ParentContext}
 {}
 
-bool VulkanDevice::Initialize(const RenderContext& Context)
+bool VulkanDevice::Initialize()
 {
-    const auto& vulkanCtx = dynamic_cast<const VulkanContext&>(Context);
-
-    SelectPhysicalDevice(vulkanCtx);
+    SelectPhysicalDevice();
     if (!PhysicalDevice)
     {
         return false;
@@ -89,14 +87,11 @@ void VulkanDevice::Shutdown()
  */
 bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
 {
-    if (Swapchains.contains(InWindow))
+    if (Swapchains.contains(InWindow->GetHandle()))
     {
         // TODO : Error, disallow multiple SC for singular window
         return false;
     }
-
-    OS::Window* FoundWindow = Context->GetWindow(InWindow);
-    CRVM_LOG_RETURN_IF(!FoundWindow,)
 
     const u32 queueFamilyIndices[] = {GraphicsQueue.FamilyIndex, TransferQueue.FamilyIndex};
     const eastl::span<const u32> indices(queueFamilyIndices);
@@ -104,20 +99,20 @@ bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
         .Instance = Context->Instance,
         .PhysicalDevice = PhysicalDevice,
         .Device = Device,
-        .Window = FoundWindow,
+        .Window = InWindow,
         .QueueFamilyIndices = IsTransferQueueConcurrent()
                                   ? eastl::span<const u32>(queueFamilyIndices)
                                   : eastl::span<const u32>(queueFamilyIndices).subspan(0, 1)
     };
 
-    auto [_, success] = Swapchains.try_emplace(InWindow, params);
+    auto [_, success] = Swapchains.try_emplace(InWindow->GetHandle(), params);
     return success;
 }
 
-void VulkanDevice::SelectPhysicalDevice(const VulkanContext& Context)
+void VulkanDevice::SelectPhysicalDevice()
 {
     u32 deviceCount = 0;
-    vk::Result res = Context.Instance.enumeratePhysicalDevices(&deviceCount, nullptr);
+    vk::Result res = Context->Instance.enumeratePhysicalDevices(&deviceCount, nullptr);
     if (deviceCount == 0)
     {
         // TODO : Print results
@@ -125,7 +120,7 @@ void VulkanDevice::SelectPhysicalDevice(const VulkanContext& Context)
     }
     eastl::vector<vk::PhysicalDevice> physicalDevices;
     physicalDevices.resize(deviceCount);
-    res = Context.Instance.enumeratePhysicalDevices(&deviceCount, physicalDevices.data());
+    res = Context->Instance.enumeratePhysicalDevices(&deviceCount, physicalDevices.data());
 
     eastl::vector<u32> deviceScores(physicalDevices.size(), 0);
     for (u32 i = 0; const auto& device: physicalDevices)
@@ -171,7 +166,7 @@ void VulkanDevice::InitDevice()
     TransferQueue = queueInfos[1];
 
     vk::DeviceCreateInfo info;
-    info.queueCreateInfoCount = queueCreateInfos.size();
+    info.queueCreateInfoCount = static_cast<u32>(queueCreateInfos.size());
     info.pQueueCreateInfos = queueCreateInfos.data();
 
     // Extensions
@@ -214,7 +209,7 @@ void VulkanDevice::InitDevice()
     eastl::vector<const char*> extensions = checkOptExtName(properties);
     extensions.insert(extensions.end(), reqDeviceExtNames.begin(), reqDeviceExtNames.end());
 
-    info.enabledExtensionCount = extensions.size();
+    info.enabledExtensionCount = static_cast<u32>(extensions.size());
     info.ppEnabledExtensionNames = extensions.data();
 
     // Features
@@ -309,7 +304,7 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
     bool transferFound = false;
     u32 transferFamilyIndex = 0;
     bool transferUnique = false;
-    for (u32 i = 0; const auto& [_, _, prop]: props)
+    for (u32 i = 0; const auto& [_1, _2, prop]: props)
     {
         if (prop.queueFlags & vk::QueueFlagBits::eGraphics)
         {

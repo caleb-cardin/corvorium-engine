@@ -9,11 +9,13 @@ target_link_libraries(CorvoriumEngine
 target_sources(CorvoriumEngine
         PUBLIC FILE_SET vfs_interface TYPE CXX_MODULES FILES
         VFS.cppm
+        VirtualFileSystem.cppm
         Types.cppm
-        PRIVATE FILE_SET io_impl TYPE CXX_MODULES FILES
-        BackendInterface.cppm
-        MountTable.cppm
-        backends/LooseFileSyncBackend.cppm
+        PRIVATE FILE_SET vfs_impl TYPE CXX_MODULES FILES
+        private/BackendInterface.cppm
+        private/MountTable.cppm
+        private/VirtualFileSystem.cppm
+        private/backends/LooseFileSyncBackend.cppm
 )
 
 target_include_directories(CorvoriumEngine PUBLIC ./include)

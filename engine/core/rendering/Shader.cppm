@@ -1,12 +1,12 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
 export module Rendering:Shader;
 import Common;
 
 namespace Corvorium::Rendering {
-export enum class ShaderStageFlagBits : u32 {
+export CRVM_API enum class ShaderStageFlagBits : u32 {
     None = 0,
 
     Vertex = 0x1 << 0,
@@ -36,7 +36,7 @@ DECLARE_FLAG_TYPE_NS(ShaderStageFlags, Rendering::ShaderStageFlagBits, Rendering
 }
 
 namespace Corvorium::Rendering {
-export class Shader {
+export class CRVM_API Shader {
 public:
     virtual ~Shader() = default;
 };

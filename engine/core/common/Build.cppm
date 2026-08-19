@@ -1,26 +1,26 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 export module Common:Build;
 
 export namespace Corvorium::Build {
-enum class BuildMode {
+CRVM_API enum class BuildMode {
     Release = 0,
     Development = 1,
     Debug = 2
 };
 
-constexpr auto DebugBuild() -> bool
+consteval auto DebugBuild() -> bool
 {
     return static_cast<BuildMode>(CORVORIUM_BUILD_MODE) == BuildMode::Debug;
 }
 
-constexpr auto DevelopmentBuild() -> bool
+consteval auto DevelopmentBuild() -> bool
 {
     return static_cast<BuildMode>(CORVORIUM_BUILD_MODE) == BuildMode::Development;
 }
 
-constexpr auto ReleaseBuild() -> bool
+consteval auto ReleaseBuild() -> bool
 {
     return static_cast<BuildMode>(CORVORIUM_BUILD_MODE) == BuildMode::Release;
 }

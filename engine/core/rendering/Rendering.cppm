@@ -1,10 +1,10 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 export module Rendering;
 
 namespace Corvorium::Rendering {
-class RenderingModule {
+export class CRVM_API RenderingModule {
 public:
     RenderingModule();
     ~RenderingModule();

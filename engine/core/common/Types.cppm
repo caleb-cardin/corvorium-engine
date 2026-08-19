@@ -12,11 +12,12 @@ template<typename T>
 class HandleType {
 public:
     using Handle_t = u64;
-    static constexpr Handle_t kInvalidHandle = ~0x0;
+    static constexpr Handle_t kInvalidHandle = ~0x0ull;
 
     HandleType()
         : Handle{kInvalidHandle}
     {}
+
     ~HandleType() = default;
 
     HandleType(const HandleType&) = default;
@@ -35,7 +36,7 @@ public:
     }
 
 private:
-    friend class eastl::hash<Corvorium::HandleType<T>>;
+    friend struct eastl::hash<Corvorium::HandleType<T>>;
     static eastl::atomic<u64> NextHandle;
     u64 Handle;
 
@@ -51,7 +52,7 @@ eastl::atomic<u64> HandleType<T>::NextHandle{0};
 export namespace eastl {
 template<typename T>
 struct hash<Corvorium::HandleType<T>> : public hash<uint64_t> {
-    size_t operator()(const Corvorium::HandleType<T> HandleType)
+    size_t operator()(const Corvorium::HandleType<T> HandleType) const
     {
         return hash<uint64_t>::operator()(HandleType.Handle);
     }

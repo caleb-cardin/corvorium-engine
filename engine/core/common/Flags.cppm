@@ -1,6 +1,6 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 #include <type_traits>
 export module Common:Flags;
 import :Types;
@@ -48,7 +48,7 @@ public:
 
     constexpr bool operator==(E Other) const
     {
-        return FlagBits == Other;
+        return FlagBits == static_cast<Eut>(Other);
     }
 
     constexpr FlagType operator~() const

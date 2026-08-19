@@ -7,5 +7,5 @@ set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
 project(CorvoriumEngine CXX)
 
-add_subdirectory(lib)
+add_subdirectory(lib SYSTEM)
 add_subdirectory(engine)

@@ -1,14 +1,16 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
 
 #include <atomic>
-#include <EASTL/fixed_string.h>
+#include <EASTL/string.h>
+#include <EASTL/vector.h>
 export module VFS:Types;
 import Common;
 
 namespace Corvorium::VFS {
+export using ByteArray = eastl::vector<std::byte>;
 export using VirtualPath = eastl::string;
 export using PhysicalPath = eastl::string;
 
@@ -117,4 +119,14 @@ const char* ToCStr(const VfsError Error)
 
 namespace Corvorium {
 DECLARE_FLAG_TYPE_NS(MountFlags, VFS::MountFlagBits, VFS);
+
+namespace VFS {
+class IVFSBackend;
+
+struct VirtualPathInfo {
+    IVFSBackend* Backend{nullptr};
+    PhysicalPath PhysicalPath{};
+    MountFlags Flags{};
+};
+}
 }

@@ -1,8 +1,7 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
+#include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
-
 
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/logger.h>
@@ -11,6 +10,9 @@ module;
 #include <string>
 #include <memory>
 #include <source_location>
+
+#include "EASTL/string.h"
+#include "EASTL/unique_ptr.h"
 
 export module Common:Logging;
 import :Types;
@@ -36,51 +38,20 @@ export constexpr auto kCritical = LogLevelBits::Critical;
 DECLARE_FLAG_TYPE_PRIVATE(LogLevel, LogLevelBits)
 
 namespace Log {
-export class Logger {
+export class CRVM_API Logger {
 public:
     Logger() = delete;
-    explicit Logger(std::string&& Name);
+    explicit Logger(eastl::string&& Name);
 
-    ~Logger() = default;
+    ~Logger();
 
-    auto operator->() const -> spdlog::logger*
-    {
-        return pLogger.get();
-    }
+    auto operator->() const -> spdlog::logger*;
 
 private:
-    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> pSink;
-    std::unique_ptr<spdlog::logger> pLogger;
+    class Impl;
+#include "SilenceDllMemberWarningBegin.inc"
+    eastl::unique_ptr<Impl> pImpl;
+#include "SilenceDllMemberWarningEnd.inc"
 };
-
-std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> g_loggersColorSink;
-
-static auto GetGlobalLoggerSink() -> std::shared_ptr<spdlog::sinks::stdout_color_sink_mt>
-{
-    if (!g_loggersColorSink)
-    {
-        g_loggersColorSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    }
-    return g_loggersColorSink;
-}
-
-Logger::Logger(std::string&& Name)
-    : pSink{GetGlobalLoggerSink()}
-    , pLogger{std::make_unique<spdlog::logger>(std::forward<std::string>(Name), pSink)}
-{
-    pLogger->set_pattern("[%H:%M:%S] [%t] | [%n] %^[- %l -]%$ : %v");
-    if constexpr (Build::DebugBuild())
-    {
-        pLogger->flush_on(spdlog::level::n_levels);
-    }
-    if constexpr (Build::DevelopmentBuild())
-    {
-        pLogger->flush_on(spdlog::level::warn);
-    }
-    if constexpr (Build::ReleaseBuild())
-    {
-        pLogger->flush_on(spdlog::level::critical);
-    }
-}
 }
 }

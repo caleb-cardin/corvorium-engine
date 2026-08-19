@@ -6,6 +6,7 @@ module;
 #include "vulkan/vulkan.hpp"
 module Rendering:VkSwapchain;
 import OS;
+import Common;
 import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
@@ -32,7 +33,7 @@ private:
 
 static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
 {
-    for (const auto& format : Formats)
+    for (const auto& format: Formats)
     {
         if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
         {
@@ -44,7 +45,7 @@ static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::Surface
 
 static vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
 {
-    for (const auto& mode : Modes)
+    for (const auto& mode: Modes)
     {
         if (mode == vk::PresentModeKHR::eMailbox) return mode;
     }
@@ -86,7 +87,7 @@ VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
     info.imageArrayLayers = 1;
     info.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
     info.imageSharingMode = Params.QueueFamilyIndices.size() > 1 ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive;
-    info.queueFamilyIndexCount = Params.QueueFamilyIndices.size();
+    info.queueFamilyIndexCount = static_cast<u32>(Params.QueueFamilyIndices.size());
     info.pQueueFamilyIndices = Params.QueueFamilyIndices.data();
     info.preTransform = surfaceCaps.surfaceCapabilities.currentTransform;
     info.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
@@ -117,13 +118,7 @@ VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
         viewInfo.viewType = vk::ImageViewType::e2D;
         viewInfo.format = selectedFormat.surfaceFormat.format;
         viewInfo.components = vk::ComponentMapping{};
-        viewInfo.subresourceRange = vk::ImageSubresourceRange{
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .baseMipLevel = 0u,
-            .levelCount = 1u,
-            .baseArrayLayer = 0u,
-            .layerCount = 1u
-        };
+        viewInfo.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
         if (auto viewResult = Params.Device.createImageView(viewInfo); viewResult.has_value())
         {

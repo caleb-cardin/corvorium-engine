@@ -1,8 +1,8 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
+#include "CorvoriumApi.h"
 
 #include "GLFW/glfw3.h"
-
 #include "EASTL/hash_map.h"
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector_map.h"
@@ -13,7 +13,7 @@ import :Window;
 namespace Corvorium::OS {
 void WindowCloseCallback(GLFWwindow* WindowRaw);
 
-export class WindowManager {
+export class CRVM_API WindowManager {
 public:
     WindowManager() = default;
     ~WindowManager();

@@ -10,7 +10,7 @@ template<> struct FlagTypeTraits<_enum_type> {static constexpr bool IsFlag = tru
 namespace _ns {using _flag_name = FlagType<_enum_type>};
 
 #define DECLARE_FLAG_TYPE(_flag_name, _enum_type) \
-template<> struct ::Corvorium::FlagTypeTraits<_enum_type> {static constexpr bool IsFlag = true;};\
+template<> struct FlagTypeTraits<_enum_type> {static constexpr bool IsFlag = true;};\
 export using _flag_name = FlagType<_enum_type>;
 
 #define DECLARE_FLAG_TYPE_NS(_flag_name, _enum_type, _ns) \

@@ -5,10 +5,7 @@ module;
 module Rendering:VkPipeline;
 
 namespace Corvorium::Rendering::Vulkan {
-
-struct GraphicsPipelineCreateParams {
-
-};
+struct GraphicsPipelineCreateParams {};
 
 class GraphicsPipeline {
 public:
@@ -23,12 +20,12 @@ private:
     vk::PipelineLayout Layout;
 };
 
-GraphicsPipeline::GraphicsPipeline(const vk::Device InDevice, const GraphicsPipelineCreateParams& Params)
+GraphicsPipeline::GraphicsPipeline(const vk::Device InDevice, vk::PipelineCache Cache, const GraphicsPipelineCreateParams& Params)
     : Device{InDevice}
 {
     vk::GraphicsPipelineCreateInfo info;
 
-    auto result = Device.createGraphicsPipeline(nullptr, info, );
+    auto result = Device.createGraphicsPipeline(Cache, info);
 }
 
 GraphicsPipeline::~GraphicsPipeline()

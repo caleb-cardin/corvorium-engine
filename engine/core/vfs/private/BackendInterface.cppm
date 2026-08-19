@@ -7,8 +7,6 @@ module VFS:BackendInterface;
 import :Types;
 
 namespace Corvorium::VFS {
-using ByteArray = eastl::vector<std::byte>;
-
 class IVFSBackend {
 public:
     virtual ~IVFSBackend() = default;
