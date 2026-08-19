@@ -1,0 +1,19 @@
+
+target_compile_definitions(CorvoriumEngine PUBLIC VULKAN_HPP_NO_EXCEPTIONS)
+target_link_libraries(CorvoriumEngine
+        PRIVATE
+        EASTL
+)
+
+
+target_sources(CorvoriumEngine
+        PUBLIC FILE_SET vfs_interface TYPE CXX_MODULES FILES
+        VFS.cppm
+        Types.cppm
+        PRIVATE FILE_SET io_impl TYPE CXX_MODULES FILES
+        BackendInterface.cppm
+        MountTable.cppm
+        backends/LooseFileSyncBackend.cppm
+)
+
+target_include_directories(CorvoriumEngine PUBLIC ./include)

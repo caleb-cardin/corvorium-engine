@@ -1,5 +1,6 @@
 
 add_subdirectory(common)
+add_subdirectory(vfs)
 add_subdirectory(os)
 
 #add_subdirectory(memory)
