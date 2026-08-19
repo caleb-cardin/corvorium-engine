@@ -4,6 +4,7 @@ module;
 #include "common/Logging.hpp"
 #include "EASTL/vector.h"
 #include "EASTL/array.h"
+#include "EASTL/hash_map.h"
 
 #include "vulkan/vulkan.hpp"
 module Rendering:VkDevice;
@@ -29,7 +30,7 @@ public:
     bool Initialize(const RenderContext& Context) override;
     void Shutdown() override;
 
-    bool CreateSwapchainForWindow(OS::WindowHandle InWindow);
+    bool CreateSwapchainForWindow(OS::Window* InWindow);
 
 private:
     VulkanContext* Context;
@@ -46,13 +47,12 @@ private:
 
     void SelectPhysicalDevice(const VulkanContext& Context);
     void InitDevice();
-    void InitMainWindowSwapchain();
     void InitPipelineCache();
 
     eastl::vector<QueueData> CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos);
-    bool IsTransferQueueConcurrent() const;
+    [[nodiscard]] bool IsTransferQueueConcurrent() const;
 
-    eastl::vector<u8> LoadPipelineCacheData() const;
+    [[nodiscard]] eastl::vector<u8> LoadPipelineCacheData() const;
 };
 
 VulkanDevice::VulkanDevice(VulkanContext* ParentContext)
@@ -61,9 +61,9 @@ VulkanDevice::VulkanDevice(VulkanContext* ParentContext)
 
 bool VulkanDevice::Initialize(const RenderContext& Context)
 {
-    auto VulkanCtx = static_cast<const VulkanContext&>(Context);
+    const auto& vulkanCtx = dynamic_cast<const VulkanContext&>(Context);
 
-    SelectPhysicalDevice(VulkanCtx);
+    SelectPhysicalDevice(vulkanCtx);
     if (!PhysicalDevice)
     {
         return false;
@@ -87,7 +87,7 @@ void VulkanDevice::Shutdown()
  * @param InWindow Window handle to create the swapchain surface from
  * @return true if swapchain was created, false if swapchain already exists for the given window
  */
-bool VulkanDevice::CreateSwapchainForWindow(const OS::WindowHandle InWindow)
+bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
 {
     if (Swapchains.contains(InWindow))
     {
@@ -96,18 +96,18 @@ bool VulkanDevice::CreateSwapchainForWindow(const OS::WindowHandle InWindow)
     }
 
     OS::Window* FoundWindow = Context->GetWindow(InWindow);
-    CRVM_LOG_RETURN_IF(!FoundWindow, )
+    CRVM_LOG_RETURN_IF(!FoundWindow,)
 
     const u32 queueFamilyIndices[] = {GraphicsQueue.FamilyIndex, TransferQueue.FamilyIndex};
     const eastl::span<const u32> indices(queueFamilyIndices);
-    VulkanSwapchainCreateParams params {
+    VulkanSwapchainCreateParams params{
         .Instance = Context->Instance,
         .PhysicalDevice = PhysicalDevice,
         .Device = Device,
         .Window = FoundWindow,
         .QueueFamilyIndices = IsTransferQueueConcurrent()
-            ? eastl::span<const u32>(queueFamilyIndices)
-            : eastl::span<const u32>(queueFamilyIndices).subspan(0, 1)
+                                  ? eastl::span<const u32>(queueFamilyIndices)
+                                  : eastl::span<const u32>(queueFamilyIndices).subspan(0, 1)
     };
 
     auto [_, success] = Swapchains.try_emplace(InWindow, params);
@@ -166,7 +166,7 @@ void VulkanDevice::SelectPhysicalDevice(const VulkanContext& Context)
 void VulkanDevice::InitDevice()
 {
     eastl::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-    auto queueInfos = CreateQueueInfos(PhysicalDevice, queueCreateInfos);
+    auto queueInfos = CreateQueueInfos(queueCreateInfos);
     GraphicsQueue = queueInfos[0];
     TransferQueue = queueInfos[1];
 
@@ -176,10 +176,10 @@ void VulkanDevice::InitDevice()
 
     // Extensions
 
-    const eastl::array<const char*, 1> reqDeviceExtNames = {
+    constexpr eastl::array<const char*, 1> reqDeviceExtNames = {
         "KHR_swapchain"
     };
-    const eastl::array<const char*, 8> optDeviceExtNames = {
+    constexpr const eastl::array<const char*, 8> optDeviceExtNames = {
         "VK_EXT_memory_budget",
         "VK_EXT_memory_priority",
         "VK_AMD_device_coherent_memory",
@@ -211,11 +211,11 @@ void VulkanDevice::InitDevice()
         return exts;
     };
 
-    eastl::vector<const char*> exts = checkOptExtName(properties);
-    exts.insert(exts.end(), reqDeviceExtNames.begin(), reqDeviceExtNames.end());
+    eastl::vector<const char*> extensions = checkOptExtName(properties);
+    extensions.insert(extensions.end(), reqDeviceExtNames.begin(), reqDeviceExtNames.end());
 
-    info.enabledExtensionCount = exts.size();
-    info.ppEnabledExtensionNames = exts.data();
+    info.enabledExtensionCount = extensions.size();
+    info.ppEnabledExtensionNames = extensions.data();
 
     // Features
 
@@ -276,12 +276,6 @@ void VulkanDevice::InitDevice()
 
     Device.getQueue(queueInfos[0].FamilyIndex, queueInfos[0].QueueIndex, &GraphicsQueue.Queue);
     Device.getQueue(queueInfos[1].FamilyIndex, queueInfos[1].QueueIndex, &TransferQueue.Queue);
-}
-
-void VulkanDevice::InitMainWindowSwapchain()
-{
-    WindowHandle MainWindowHandle = Context->GetMainWindowHandle();
-    CreateSwapchainForWindow(MainWindowHandle);
 }
 
 void VulkanDevice::InitPipelineCache()

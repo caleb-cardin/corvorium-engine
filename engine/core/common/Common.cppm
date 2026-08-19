@@ -5,5 +5,6 @@ export module Common;
 export import :Assert;
 export import :Flags;
 export import :Result;
+export import :TypeDefs;
 export import :Types;
 export import :Logging;

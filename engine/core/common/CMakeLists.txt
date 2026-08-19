@@ -6,6 +6,7 @@ target_sources(CorvoriumEngine
         Flags.cppm
         Logging.cppm
         Result.cppm
+        TypeDefs.cppm
         Types.cppm
 
         PRIVATE FILE_SET common_impl TYPE CXX_MODULES FILES
