@@ -3,13 +3,10 @@ module;
 
 #include <expected>
 export module Common:Result;
-import :Types;
 export namespace Corvorium {
-
 template<typename V, typename E>
 using ResultValueType = std::expected<V, E>;
 
 template<typename E>
 using ResultError = std::unexpected<E>;
-
 }

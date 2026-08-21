@@ -2,6 +2,7 @@
 module;
 
 #include "common/Logging.hpp"
+
 #include "EASTL/vector.h"
 #include "EASTL/array.h"
 #include "EASTL/hash_map.h"
@@ -9,7 +10,6 @@ module;
 #include "vulkan/vulkan.hpp"
 module Rendering:VkDevice;
 import :Device;
-import :VkContext;
 import :VkSwapchain;
 import :VulkanUtils;
 
@@ -24,30 +24,35 @@ class VulkanDevice : public RenderDevice {
 
 public:
     VulkanDevice() = delete;
-    explicit VulkanDevice(VulkanContext* ParentContext);
-    ~VulkanDevice() override = default;
+    explicit VulkanDevice(vk::Instance Instance);
+    ~VulkanDevice() override;
 
-    bool Initialize() override;
-    void Shutdown() override;
+    [[nodiscard]] bool IsInitialized() const override;
+
+    [[nodiscard]] vk::Instance GetInstance() { return Instance; }
+    [[nodiscard]] vk::PhysicalDevice GetPhysicalDevice() { return PhysicalDevice; }
+    [[nodiscard]] vk::Device GetDevice() { return Device; }
 
     bool CreateSwapchainForWindow(OS::Window* InWindow);
+    static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
 
 private:
-    VulkanContext* Context;
+    vk::Instance Instance{nullptr};
+    bool Initialized{false};
 
-    vk::PhysicalDevice PhysicalDevice;
-    vk::Device Device;
+    vk::PhysicalDevice PhysicalDevice{nullptr};
+    vk::Device Device{nullptr};
 
-    QueueData GraphicsQueue;
-    QueueData TransferQueue;
+    QueueData GraphicsQueue{};
+    QueueData TransferQueue{};
 
-    eastl::hash_map<OS::WindowHandle, VulkanSwapchain> Swapchains;
+    eastl::hash_map<OS::WindowHandle, VulkanSwapchain, HandleHash> Swapchains{};
 
-    vk::PipelineCache PipelineCache;
+    vk::PipelineCache PipelineCache{nullptr};
 
-    void SelectPhysicalDevice();
-    void InitDevice();
-    void InitPipelineCache();
+    bool SelectPhysicalDevice();
+    bool InitDevice();
+    bool InitPipelineCache();
 
     eastl::vector<QueueData> CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos);
     [[nodiscard]] bool IsTransferQueueConcurrent() const;
@@ -55,29 +60,32 @@ private:
     [[nodiscard]] eastl::vector<u8> LoadPipelineCacheData() const;
 };
 
-VulkanDevice::VulkanDevice(VulkanContext* ParentContext)
-    : Context{ParentContext}
-{}
-
-bool VulkanDevice::Initialize()
+VulkanDevice::VulkanDevice(vk::Instance Instance)
+    : Instance{Instance}
 {
     SelectPhysicalDevice();
     if (!PhysicalDevice)
     {
-        return false;
+        return;
     }
 
     InitDevice();
 
-    return true;
+    Initialized = true;
 }
 
-void VulkanDevice::Shutdown()
+VulkanDevice::~VulkanDevice()
 {
+    Swapchains.clear();
     Device.destroy();
     PhysicalDevice = nullptr;
 }
 
+
+bool VulkanDevice::IsInitialized() const
+{
+    return Initialized;
+}
 
 // TODO : This function has multiple fail states, consider proper error returns.
 /**
@@ -96,9 +104,8 @@ bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
     const u32 queueFamilyIndices[] = {GraphicsQueue.FamilyIndex, TransferQueue.FamilyIndex};
     const eastl::span<const u32> indices(queueFamilyIndices);
     VulkanSwapchainCreateParams params{
-        .Instance = Context->Instance,
-        .PhysicalDevice = PhysicalDevice,
-        .Device = Device,
+        .Instance = Instance,
+        .Device = this,
         .Window = InWindow,
         .QueueFamilyIndices = IsTransferQueueConcurrent()
                                   ? eastl::span<const u32>(queueFamilyIndices)
@@ -106,21 +113,39 @@ bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
     };
 
     auto [_, success] = Swapchains.try_emplace(InWindow->GetHandle(), params);
-    return success;
+    if (!success)
+    {
+        return false;
+    }
+
+    return true;
 }
 
-void VulkanDevice::SelectPhysicalDevice()
+void VulkanDevice::OnWindowClosed(OS::Window* Window, void* OwningDevice)
+{
+    Assert(Window);
+    Assert(OwningDevice);
+    auto* Device = static_cast<VulkanDevice*>(OwningDevice);
+    const OS::WindowHandle handle = Window->GetHandle();
+    if (Device->Swapchains.contains(handle))
+    {
+        Device->Swapchains.erase(handle);
+    }
+}
+
+bool VulkanDevice::SelectPhysicalDevice()
 {
     u32 deviceCount = 0;
-    vk::Result res = Context->Instance.enumeratePhysicalDevices(&deviceCount, nullptr);
-    if (deviceCount == 0)
-    {
-        // TODO : Print results
-        return;
-    }
+    vk::Result res = Instance.enumeratePhysicalDevices(&deviceCount, nullptr);
+    CRVM_LOG_RETURN_IF(deviceCount == 0 || res != vk::Result::eSuccess,
+                       false,
+                       VulkanLogger,
+                       kError,
+                       "Failed to initialize device: No GPU found.");
+
     eastl::vector<vk::PhysicalDevice> physicalDevices;
     physicalDevices.resize(deviceCount);
-    res = Context->Instance.enumeratePhysicalDevices(&deviceCount, physicalDevices.data());
+    res = Instance.enumeratePhysicalDevices(&deviceCount, physicalDevices.data());
 
     eastl::vector<u32> deviceScores(physicalDevices.size(), 0);
     for (u32 i = 0; const auto& device: physicalDevices)
@@ -156,12 +181,14 @@ void VulkanDevice::SelectPhysicalDevice()
     }
 
     PhysicalDevice = chosenDevice;
+    return true;
 }
 
-void VulkanDevice::InitDevice()
+bool VulkanDevice::InitDevice()
 {
     eastl::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
     auto queueInfos = CreateQueueInfos(queueCreateInfos);
+    CRVM_LOG_RETURN_IF(queueCreateInfos.size() != 2, false, VulkanLogger, kError, "Failed to query for queue data.");
     GraphicsQueue = queueInfos[0];
     TransferQueue = queueInfos[1];
 
@@ -172,14 +199,15 @@ void VulkanDevice::InitDevice()
     // Extensions
 
     constexpr eastl::array<const char*, 1> reqDeviceExtNames = {
-        "KHR_swapchain"
+        "VK_KHR_swapchain"
     };
-    constexpr const eastl::array<const char*, 8> optDeviceExtNames = {
+    constexpr const eastl::array<const char*, 9> optDeviceExtNames = {
         "VK_EXT_memory_budget",
         "VK_EXT_memory_priority",
         "VK_AMD_device_coherent_memory",
         "VK_EXT_descriptor_heap",
         "VK_KHR_maintenance7",
+        "VK_KHR_deferred_host_operations",
         "VK_KHR_acceleration_structure",
         "VK_KHR_ray_tracing_pipeline",
         "VK_EXT_mesh_shader"
@@ -187,23 +215,25 @@ void VulkanDevice::InitDevice()
 
     u32 propertyCount = 0;
     vk::Result res = PhysicalDevice.enumerateDeviceExtensionProperties(nullptr, &propertyCount, nullptr);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to enumerate physical devices.");
     eastl::vector<vk::ExtensionProperties> properties(propertyCount, vk::ExtensionProperties{});
     res = PhysicalDevice.enumerateDeviceExtensionProperties(nullptr, &propertyCount, properties.data());
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to enumerate physical devices.");
     // TODO check results
 
     auto checkOptExtName = [optDeviceExtNames](const eastl::vector<vk::ExtensionProperties>& available) -> eastl::vector<const char*> {
-        eastl::vector<const char*> exts;
+        eastl::vector<const char*> extensions;
         for (const auto& prop: available)
         {
             for (const char* checkName: optDeviceExtNames)
             {
                 if (std::strcmp(prop.extensionName, checkName) == 0)
                 {
-                    exts.emplace_back(checkName);
+                    extensions.emplace_back(checkName);
                 }
             }
         }
-        return exts;
+        return extensions;
     };
 
     eastl::vector<const char*> extensions = checkOptExtName(properties);
@@ -260,20 +290,23 @@ void VulkanDevice::InitDevice()
     info.pNext = &enabledFeatures12;
 
 
-    if (vk::ResultValue result = PhysicalDevice.createDevice(info); result.has_value())
+    if (vk::ResultValue result = PhysicalDevice.createDevice(info);
+        result.has_value())
     {
         Device = result.value;
     }
     else
     {
-        // TODO : Log errors
+        return false;
     }
 
     Device.getQueue(queueInfos[0].FamilyIndex, queueInfos[0].QueueIndex, &GraphicsQueue.Queue);
     Device.getQueue(queueInfos[1].FamilyIndex, queueInfos[1].QueueIndex, &TransferQueue.Queue);
+
+    return true;
 }
 
-void VulkanDevice::InitPipelineCache()
+bool VulkanDevice::InitPipelineCache()
 {
     eastl::vector<u8> pipelineCacheData = LoadPipelineCacheData();
 
@@ -283,11 +316,9 @@ void VulkanDevice::InitPipelineCache()
     if (const auto result = Device.createPipelineCache(info); result.has_value())
     {
         PipelineCache = result.value;
+        return true;
     }
-    else
-    {
-        PipelineCache = nullptr;
-    }
+    return false;
 }
 
 eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos)
@@ -306,7 +337,7 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
     bool transferUnique = false;
     for (u32 i = 0; const auto& [_1, _2, prop]: props)
     {
-        if (prop.queueFlags & vk::QueueFlagBits::eGraphics)
+        if (!graphicsFound && prop.queueFlags & vk::QueueFlagBits::eGraphics)
         {
             graphicsFound = true;
             graphicsFamilyIndex = i;
@@ -316,13 +347,14 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
                 transferFamilyIndex = i;
             }
         }
-        if (!transferUnique && prop.queueFlags & vk::QueueFlagBits::eTransfer
-            && !(prop.queueFlags & vk::QueueFlagBits::eGraphics))
+        else if (!transferUnique && prop.queueFlags & vk::QueueFlagBits::eTransfer)
         {
             transferUnique = true;
             transferFound = true;
             transferFamilyIndex = i;
         }
+        ++i;
+        if (graphicsFound && transferUnique) break;
     }
 
     if (!graphicsFound || !transferFound)
@@ -330,10 +362,10 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
         return {};
     }
 
-    constexpr float priorities[] = {-1.f, -1.f};
+    static constexpr eastl::array<f32, 2> priorities = {1.f, 1.f};
 
     vk::DeviceQueueCreateInfo& graphicsCreateInfo = OutQueueInfos.emplace_back();
-    graphicsCreateInfo.pQueuePriorities = priorities;
+    graphicsCreateInfo.pQueuePriorities = priorities.data();
     graphicsCreateInfo.queueFamilyIndex = graphicsFamilyIndex;
     graphicsCreateInfo.queueCount = 1;
 
@@ -344,7 +376,7 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
     else
     {
         vk::DeviceQueueCreateInfo& transferCreateInfo = OutQueueInfos.emplace_back();
-        transferCreateInfo.pQueuePriorities = priorities;
+        transferCreateInfo.pQueuePriorities = priorities.data();
         transferCreateInfo.queueFamilyIndex = transferFamilyIndex;
         transferCreateInfo.queueCount = 1;
     }

@@ -9,3 +9,5 @@ project(CorvoriumEngine CXX)
 
 add_subdirectory(lib SYSTEM)
 add_subdirectory(engine)
+
+add_subdirectory(test/testApp)

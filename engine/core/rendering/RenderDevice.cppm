@@ -10,7 +10,6 @@ class CRVM_API RenderDevice {
 public:
     virtual ~RenderDevice() = default;
 
-    virtual bool Initialize() = 0;
-    virtual void Shutdown() = 0;
+    [[nodiscard]] virtual bool IsInitialized() const = 0;
 };
 }

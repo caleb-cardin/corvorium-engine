@@ -4,11 +4,11 @@ module;
 #include "CorvoriumApi.h"
 #include "BreakpointDefinitions.hpp"
 
+#include <cassert>
 #include <cstdlib>
 
 export module Common:Assert;
 import :Build;
-import :Types;
 import :Logging;
 
 namespace Corvorium {
@@ -19,10 +19,12 @@ export namespace Corvorium {
 template<Detail::Boolean T>
 CRVM_API bool Assert(T t)
 {
-    if constexpr (Build::DebugBuild()) assert(t);
+    if constexpr (Build::DebugBuild())
+        assert(t);
     if constexpr (Build::DevelopmentBuild())
         CORVORIUM_DEBUG_BREAK();
-    if constexpr (Build::ReleaseBuild()) std::abort();
+    if constexpr (Build::ReleaseBuild())
+        std::abort();
     return t;
 }
 }

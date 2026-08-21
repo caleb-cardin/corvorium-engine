@@ -3,7 +3,7 @@ module;
 #include "CorvoriumApi.h"
 #include <type_traits>
 export module Common:Flags;
-import :Types;
+import :TypeDefs;
 export namespace Corvorium {
 template<typename E>
 struct FlagTypeTraits {

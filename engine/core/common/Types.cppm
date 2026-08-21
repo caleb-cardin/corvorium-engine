@@ -2,13 +2,15 @@
 module;
 
 #include "EASTL/atomic.h"
-#include  "EASTL/functional.h"
+#include "EASTL/functional.h"
 
 export module Common:Types;
 import :TypeDefs;
 
-export namespace Corvorium {
-template<typename T>
+namespace Corvorium {
+export struct HandleHash;
+
+export template<typename T>
 class HandleType {
 public:
     using Handle_t = u64;
@@ -27,7 +29,7 @@ public:
 
     static HandleType New()
     {
-        return HandleType(NextHandle.fetch_add(1ull, eastl::memory_order_relaxed));
+        return HandleType(NextHandle.fetch_add(1ull, eastl::internal::memory_order_relaxed_s{}));
     }
 
     bool operator==(const HandleType& Other) const
@@ -35,8 +37,13 @@ public:
         return Handle == Other.Handle;
     }
 
+    bool operator==(const Handle_t Other) const
+    {
+        return Handle == Other;
+    }
+
 private:
-    friend struct eastl::hash<Corvorium::HandleType<T>>;
+    friend struct HandleHash;
     static eastl::atomic<u64> NextHandle;
     u64 Handle;
 
@@ -45,16 +52,14 @@ private:
     {}
 };
 
-template<typename T>
-eastl::atomic<u64> HandleType<T>::NextHandle{0};
-}
-
-export namespace eastl {
-template<typename T>
-struct hash<Corvorium::HandleType<T>> : public hash<uint64_t> {
-    size_t operator()(const Corvorium::HandleType<T> HandleType) const
+struct HandleHash {
+    template<typename T>
+    size_t operator()(const HandleType<T>& Handle) const EA_NOEXCEPT
     {
-        return hash<uint64_t>::operator()(HandleType.Handle);
+        return eastl::hash<uint64_t>()(Handle.Handle);
     }
 };
+
+template<typename T>
+eastl::atomic<u64> HandleType<T>::NextHandle{0};
 }

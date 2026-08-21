@@ -35,10 +35,8 @@ public:
     [[nodiscard]] VfsError WriteFile(const eastl::string& Path, const ByteArray& Bytes) const;
 
 private:
-#include "SilenceDllMemberWarningBegin.inc"
     eastl::unique_ptr<MountTable> pMountTable{nullptr};
     eastl::unique_ptr<IVFSBackend> pBackend{nullptr};
-#include "SilenceDllMemberWarningEnd.inc"
 
     VfsError Resolve(const VirtualPath& Path, VirtualPathInfo& PathInfo) const;
 };

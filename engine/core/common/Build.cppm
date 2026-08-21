@@ -4,7 +4,7 @@ module;
 export module Common:Build;
 
 export namespace Corvorium::Build {
-CRVM_API enum class BuildMode {
+enum class BuildMode {
     Release = 0,
     Development = 1,
     Debug = 2

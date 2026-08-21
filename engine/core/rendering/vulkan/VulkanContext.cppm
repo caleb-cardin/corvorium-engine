@@ -1,34 +1,70 @@
-
+// Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
+#include "common/Logging.hpp"
 
 #include "EASTL/vector.h"
+#include "EASTL/unique_ptr.h"
+
 #include "vulkan/vulkan.hpp"
+
+
 module Rendering:VkContext;
 import :Context;
+import :VkDevice;
+import :Types;
+import :VulkanUtils;
 
 import Common;
 
 
 namespace Corvorium::Rendering::Vulkan {
+VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
+    vk::DebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
+    [[maybe_unused]] vk::DebugUtilsMessageTypeFlagsEXT MessageType,
+    const vk::DebugUtilsMessengerCallbackDataEXT* CallbackData,
+    [[maybe_unused]] void* UserData)
+{
+    switch (MessageSeverity)
+    {
+    case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+        [[fallthrough]];
+    case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+        CRVM_LOG(VulkanLogger, kInfo, "{}", CallbackData->pMessage);
+    case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+        CRVM_LOG(VulkanLogger, kWarning, "{}", CallbackData->pMessage);
+    case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+        CRVM_LOG(VulkanLogger, kError, "{}", CallbackData->pMessage);
+    default: {}
+    }
+    return VK_FALSE;
+}
 
 class VulkanContext : public RenderContext {
 public:
-    VulkanContext() = delete;
-    ~VulkanContext() override = default;
+    VulkanContext();
+    ~VulkanContext() override;
 
-    bool Initialize() override;
-    void Shutdown() override;
+    [[nodiscard]] bool IsInitialized() override;
+    [[nodiscard]] RenderDevice* GetDevice() const override;
+
+    void InitializeWindow(OS::Window* Window) override;
 
 private:
     friend class VulkanDevice;
-    vk::Instance Instance;
+    vk::Instance Instance = nullptr;
+    vk::DebugUtilsMessengerEXT DebugMessenger;
+    eastl::unique_ptr<VulkanDevice> Device = nullptr;
 
-    bool IsInitialized = false;
+    bool Initialized = false;
 };
 
 
-bool VulkanContext::Initialize()
+VulkanContext::VulkanContext()
 {
+    VulkanDispatcher.init();
+    vk::detail::DynamicLoader dl;
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    VulkanDispatcher.init(vkGetInstanceProcAddr);
 
     vk::ApplicationInfo appInfo;
     appInfo.apiVersion = vk::makeApiVersion(0, 1, 4, 0);
@@ -45,18 +81,19 @@ bool VulkanContext::Initialize()
         "VK_KHR_wayland_surface",
 #endif
 #ifdef CORVORIUM_DEBUG
-        "VK_EXT_debug_utils"
+        "VK_EXT_debug_utils",
+        "VK_KHR_get_surface_capabilities2"
 #endif
     };
 
 #ifndef CORVORIUM_DEBUG
-    constexpr u32 instanceExtCount = 2;
-#else
     constexpr u32 instanceExtCount = 3;
+#else
+    constexpr u32 instanceExtCount = 4;
 #endif
 
 
-#ifndef CORVORIUM_DEBUG
+#ifdef CORVORIUM_DEBUG
     constexpr u32 instanceLayerCount = 1;
     constexpr const char* instanceLayers[] = {
         "VK_LAYER_KHRONOS_validation"
@@ -73,23 +110,53 @@ bool VulkanContext::Initialize()
     createInfo.ppEnabledLayerNames = instanceLayers;
     createInfo.pApplicationInfo = &appInfo;
 
+    const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo);
+    CRVM_LOG_RETURN_IF(!result.has_value(), /*void*/;, VulkanLogger, kError, "Failed to create Instance.");
+    Instance = result.value;
+    VulkanDispatcher.init(Instance);
 
-    if (const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo); result.has_value())
+
+    vk::DebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
+    debugMessengerInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+    debugMessengerInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                     vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+    debugMessengerInfo.pfnUserCallback = DebugCallback;
+
+    if constexpr (Build::DebugBuild())
     {
-        Instance = result.value;
-        IsInitialized = true;
-    }
-    else
-    {
-        return false;
+        vk::Result res = Instance.createDebugUtilsMessengerEXT(&debugMessengerInfo, nullptr, &DebugMessenger, VulkanDispatcher);
+        if (res != vk::Result::eSuccess)
+            CRVM_LOG(VulkanLogger, kError, "Failed to create debug messenger.");
     }
 
+    Device = eastl::make_unique<VulkanDevice>(Instance);
+    VulkanDispatcher.init(Device->GetDevice());
 
-
-    return true;
+    Initialized = true;
 }
 
-void VulkanContext::Shutdown()
-{}
+VulkanContext::~VulkanContext()
+{
+    if (IsInitialized())
+    {
+        Device.reset();
+        if constexpr (Build::DebugBuild()) { Instance.destroyDebugUtilsMessengerEXT(DebugMessenger); }
+        Instance.destroy();
+    }
+}
 
+bool VulkanContext::IsInitialized()
+{
+    return Initialized;
+}
+
+RenderDevice* VulkanContext::GetDevice() const
+{
+    return Device.get();
+}
+
+void VulkanContext::InitializeWindow(OS::Window* Window)
+{
+    Device->CreateSwapchainForWindow(Window);
+}
 }

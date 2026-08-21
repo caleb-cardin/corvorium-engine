@@ -5,6 +5,7 @@ module;
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <source_location>
+#include <string>
 
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
@@ -14,9 +15,15 @@ import :Logging;
 namespace Corvorium::Log {
 class Logger::Impl {
 public:
-    Impl(eastl::string&& Name)
-        : pLogger{eastl::make_unique<spdlog::logger>(std::forward<std::string>(Name), Impl::pSink)}
+    Impl(const eastl::string& Name)
+        : pLogger{}
     {
+        if (!pSink)
+        {
+            pSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        }
+
+        pLogger = eastl::make_unique<spdlog::logger>(std::string(Name.c_str()), Impl::pSink);
         pLogger->set_pattern("[%H:%M:%S] [%t] | [%n] %^[- %l -]%$ : %v");
         if constexpr (Build::DebugBuild())
         {
@@ -39,8 +46,8 @@ public:
 
 private:
     friend class Corvorium::Log::Logger;
-    inline static std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> pSink;
-    std::unique_ptr<spdlog::logger> pLogger;
+    inline static std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> pSink{};
+    eastl::unique_ptr<spdlog::logger> pLogger;
 };
 
 spdlog::logger* Logger::operator->() const

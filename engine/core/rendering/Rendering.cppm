@@ -2,19 +2,7 @@
 module;
 #include "CorvoriumApi.h"
 export module Rendering;
-
-namespace Corvorium::Rendering {
-export class CRVM_API RenderingModule {
-public:
-    RenderingModule();
-    ~RenderingModule();
-
-    RenderingModule(const RenderingModule&) = delete;
-    RenderingModule(RenderingModule&&) = delete;
-
-    RenderingModule& operator=(const RenderingModule&) = delete;
-    RenderingModule& operator=(RenderingModule&&) = delete;
-
-private:
-};
-}
+export import :Context;
+export import :Device;
+export import :Types;
+export import :Shader;

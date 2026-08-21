@@ -3,6 +3,7 @@ add_library(CorvoriumEngine SHARED)
 
 target_link_libraries(CorvoriumEngine PUBLIC EASTL)
 
+target_link_options(CorvoriumEngine PRIVATE /INCREMENTAL:NO)
 target_compile_definitions(CorvoriumEngine
         PRIVATE
         CORVORIUM_VERSION_MAJOR=26

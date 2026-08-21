@@ -6,28 +6,28 @@ export module Rendering:Shader;
 import Common;
 
 namespace Corvorium::Rendering {
-export CRVM_API enum class ShaderStageFlagBits : u32 {
+export enum class ShaderStageFlagBits : u32 {
     None = 0,
 
-    Vertex = 0x1 << 0,
-    TessCtrl = 0x1 << 1,
-    TessEval = 0x1 << 2,
-    Geometry = 0x1 << 3,
-    Fragment = 0x1 << 4,
+    Vertex = 0x1ull << 0,
+    TessCtrl = 0x1ull << 1,
+    TessEval = 0x1ull << 2,
+    Geometry = 0x1ull << 3,
+    Fragment = 0x1ull << 4,
 
-    Mesh = 0x1 << 5,
-    Task = 0x1 << 6,
+    Mesh = 0x1ull << 5,
+    Task = 0x1ull << 6,
 
-    RtGen = 0x1 << 7,
-    RtIntersect = 0x1 << 8,
-    RtAnyHit = 0x1 << 9,
-    RtClosestHit = 0x1 << 10,
-    RtMiss = 0x1 << 11,
-    RtCall = 0x1 << 12,
+    RtGen = 0x1ull << 7,
+    RtIntersect = 0x1ull << 8,
+    RtAnyHit = 0x1ull << 9,
+    RtClosestHit = 0x1ull << 10,
+    RtMiss = 0x1ull << 11,
+    RtCall = 0x1ull << 12,
 
-    Comp = 0x1 << 13,
+    Comp = 0x1ull << 13,
 
-    Auto = 0x1 << 31
+    Auto = 0x1ull << 31
 };
 }
 

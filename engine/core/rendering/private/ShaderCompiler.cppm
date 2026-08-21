@@ -13,9 +13,9 @@ module Rendering:ShaderCompiler;
 import :Shader;
 import :Types;
 import Common;
-namespace Corvorium::Rendering::ShaderCompiler {
 
-static Log::Logger kShaderCompileLogger{"Shader Compiler"};
+namespace Corvorium::Rendering::ShaderCompiler {
+static Log::Logger ShaderCompileLogger{"Shader Compiler"};
 
 slang::EntryPointReflection* GetEntryPointReflection(const Slang::ComPtr<slang::IEntryPoint>& pEntryPoint);
 
@@ -39,6 +39,7 @@ struct ShaderEntryPointNames {
         ShaderStageFlagBits stage{};
         eastl::string name{};
     };
+
     eastl::vector<Entry> names{};
 };
 
@@ -135,36 +136,36 @@ static void LogShaderCompilerDiagnostics(slang::IBlob* diagnostics)
         return;
     }
 
-    CRVM_LOG(kShaderCompileLogger, Error, "Slang diagnostics: {}", static_cast<const char*>(diagnostics->getBufferPointer()));
+    CRVM_LOG(ShaderCompileLogger, kError, "Slang diagnostics: {}", static_cast<const char*>(diagnostics->getBufferPointer()));
 }
 
 static SlangStage StageToSlangStage(const ShaderStageFlagBits stage)
 {
     switch (stage)
     {
-    case ShaderStageFlagBits::Vert:
+    case ShaderStageFlagBits::Vertex:
         return SLANG_STAGE_VERTEX;
-    case ShaderStageFlagBits::TCtrl:
+    case ShaderStageFlagBits::TessCtrl:
         return SLANG_STAGE_HULL;
-    case ShaderStageFlagBits::TEval:
+    case ShaderStageFlagBits::TessEval:
         return SLANG_STAGE_DOMAIN;
-    case ShaderStageFlagBits::Geom:
+    case ShaderStageFlagBits::Geometry:
         return SLANG_STAGE_GEOMETRY;
-    case ShaderStageFlagBits::Frag:
+    case ShaderStageFlagBits::Fragment:
         return SLANG_STAGE_FRAGMENT;
     case ShaderStageFlagBits::Comp:
         return SLANG_STAGE_COMPUTE;
-    case ShaderStageFlagBits::RGen:
+    case ShaderStageFlagBits::RtGen:
         return SLANG_STAGE_RAY_GENERATION;
-    case ShaderStageFlagBits::RAHit:
+    case ShaderStageFlagBits::RtAnyHit:
         return SLANG_STAGE_ANY_HIT;
-    case ShaderStageFlagBits::RCHit:
+    case ShaderStageFlagBits::RtClosestHit:
         return SLANG_STAGE_CLOSEST_HIT;
-    case ShaderStageFlagBits::RMiss:
+    case ShaderStageFlagBits::RtMiss:
         return SLANG_STAGE_MISS;
-    case ShaderStageFlagBits::RInt:
+    case ShaderStageFlagBits::RtIntersect:
         return SLANG_STAGE_INTERSECTION;
-    case ShaderStageFlagBits::RCall:
+    case ShaderStageFlagBits::RtCall:
         return SLANG_STAGE_CALLABLE;
     case ShaderStageFlagBits::Task:
         return SLANG_STAGE_AMPLIFICATION;
@@ -184,29 +185,29 @@ static ShaderStageFlagBits SlangToStageFlagBits(const SlangStage slangStage)
     switch (slangStage)
     {
     case SLANG_STAGE_VERTEX:
-        return ShaderStageFlagBits::Vert;
+        return ShaderStageFlagBits::Vertex;
     case SLANG_STAGE_HULL:
-        return ShaderStageFlagBits::TCtrl;
+        return ShaderStageFlagBits::TessCtrl;
     case SLANG_STAGE_DOMAIN:
-        return ShaderStageFlagBits::TEval;
+        return ShaderStageFlagBits::TessEval;
     case SLANG_STAGE_GEOMETRY:
-        return ShaderStageFlagBits::Geom;
+        return ShaderStageFlagBits::Geometry;
     case SLANG_STAGE_FRAGMENT:
-        return ShaderStageFlagBits::Frag;
+        return ShaderStageFlagBits::Fragment;
     case SLANG_STAGE_COMPUTE:
         return ShaderStageFlagBits::Comp;
     case SLANG_STAGE_RAY_GENERATION:
-        return ShaderStageFlagBits::RGen;
+        return ShaderStageFlagBits::RtGen;
     case SLANG_STAGE_ANY_HIT:
-        return ShaderStageFlagBits::RAHit;
+        return ShaderStageFlagBits::RtAnyHit;
     case SLANG_STAGE_CLOSEST_HIT:
-        return ShaderStageFlagBits::RCHit;
+        return ShaderStageFlagBits::RtClosestHit;
     case SLANG_STAGE_MISS:
-        return ShaderStageFlagBits::RMiss;
+        return ShaderStageFlagBits::RtMiss;
     case SLANG_STAGE_INTERSECTION:
-        return ShaderStageFlagBits::RInt;
+        return ShaderStageFlagBits::RtIntersect;
     case SLANG_STAGE_CALLABLE:
-        return ShaderStageFlagBits::RCall;
+        return ShaderStageFlagBits::RtCall;
     case SLANG_STAGE_AMPLIFICATION:
         return ShaderStageFlagBits::Task;
     case SLANG_STAGE_MESH:
@@ -227,11 +228,6 @@ slang::EntryPointReflection* GetEntryPointReflection(const Slang::ComPtr<slang::
         return entryLayout->getEntryPointByIndex(0);
     }
     return nullptr;
-}
-
-void CompilationModule::Initialize()
-{
-
 }
 
 ResultValue<eastl::vector<u32>> CompilationModule::CompileShaderByStage(const ShaderStageFlagBits shaderStage) const
@@ -271,7 +267,7 @@ ResultValue<eastl::vector<u32>> CompilationModule::CompileShaderMultiEntry(Shade
         entryPointNames.names.emplace_back(
             std::move(SlangToStageFlagBits(GetEntryPointReflection(entryPoints[i])->getStage())),
             std::move(entryPoints[i]->getFunctionReflection()->getName())
-            );
+        );
     }
     Slang::ComPtr<slang::IComponentType> pProgram{};
     m_pSession->createCompositeComponentType(components.data(), components.size(), pProgram.writeRef());
@@ -282,7 +278,7 @@ ResultValue<eastl::vector<u32>> CompilationModule::CompileShaderMultiEntry(Shade
     if (!SLANG_SUCCEEDED(result))
     {
         LogShaderCompilerDiagnostics(pDiagnostics);
-        return Error(RenderError::ShaderCompilationFailure);
+        return ResultError(RenderError::ShaderCompilationFailure);
     }
 
     Slang::ComPtr<slang::IBlob> binary;
@@ -290,7 +286,7 @@ ResultValue<eastl::vector<u32>> CompilationModule::CompileShaderMultiEntry(Shade
     if (!SLANG_SUCCEEDED(result))
     {
         LogShaderCompilerDiagnostics(pDiagnostics);
-        return Error(RenderError::ShaderCompilationFailure);
+        return ResultError(RenderError::ShaderCompilationFailure);
     }
     const auto pCode = static_cast<const u32*>(binary->getBufferPointer());
     return eastl::vector<u32>{pCode, pCode + (binary->getBufferSize() / sizeof(u32))};
@@ -308,11 +304,12 @@ CompilationModule::CompilationModule(Slang::ComPtr<slang::ISession> pSession, Sl
         Slang::ComPtr<slang::IEntryPoint> entryPoint;
         const auto result = m_pModule->getDefinedEntryPoint(entryPointIndex, entryPoint.writeRef());
         CRVM_LOG_RETURN_IF(!SLANG_SUCCEEDED(result),
-                          /*void*/,
-                          kShaderCompileLogger,
-                          Error,
-                          "Error acquiring defined entry point.");
-        auto& newComponent = linkComponents.emplace_back(Slang::ComPtr<slang::IComponentType>(entryPoint.get()));
+                           /*void*/
+                           ;,
+                           ShaderCompileLogger,
+                           kError,
+                           "Error acquiring defined entry point.");
+        auto& newComponent = linkComponents.emplace_back(entryPoint.get());
         rawLinkComponents.emplace_back(newComponent.get());
     }
 
@@ -391,7 +388,7 @@ ResultValue<CompilationModule> CompilationEnvironment::CreateShaderModule(const 
         LogShaderCompilerDiagnostics(pDiagnosticsBlob);
         if (!pModule)
         {
-            return Error(RenderError::InitializationError);
+            return ResultError(RenderError::InitializationError);
         }
     }
     return CompilationModule{m_pSession, std::move(pModule)};
@@ -412,7 +409,7 @@ void ShaderCompiler::Initialize()
         constexpr SlangGlobalSessionDesc desc{};
         if (const auto result = slang::createGlobalSession(&desc, g_pGlobalSession.writeRef()); SLANG_FAILED(result))
         {
-            CRVM_LOG(kShaderCompileLogger, Error, "Failed to initialize global session.");
+            CRVM_LOG(ShaderCompileLogger, kError, "Failed to initialize global session.");
         }
     }
 }
@@ -451,7 +448,7 @@ CompilationEnvironment ShaderCompiler::CreateCompileEnvironment(const Environmen
         }
         default:
         {
-            CRVM_LOG(kShaderCompileLogger, Error, "Unhandled shader compiler target.");
+            CRVM_LOG(ShaderCompileLogger, kError, "Unhandled shader compiler target.");
             break;
         }
         }
@@ -514,5 +511,4 @@ CompilationEnvironment ShaderCompiler::CreateCompileEnvironment(const Environmen
     g_pGlobalSession->createSession(sessionDescription, compilerSession.writeRef());
     return CompilationEnvironment{std::move(compilerSession)};
 }
-
 }

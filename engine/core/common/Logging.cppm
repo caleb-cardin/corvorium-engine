@@ -15,7 +15,7 @@ module;
 #include "EASTL/unique_ptr.h"
 
 export module Common:Logging;
-import :Types;
+import :TypeDefs;
 import :Build;
 import :Debug;
 import :Flags;
@@ -49,9 +49,7 @@ public:
 
 private:
     class Impl;
-#include "SilenceDllMemberWarningBegin.inc"
     eastl::unique_ptr<Impl> pImpl;
-#include "SilenceDllMemberWarningEnd.inc"
 };
 }
 }

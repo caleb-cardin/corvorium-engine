@@ -11,6 +11,7 @@ target_sources(CorvoriumEngine
         Types.cppm
 
         PRIVATE FILE_SET common_impl TYPE CXX_MODULES FILES
+        private/Logging.cppm
 )
 
 target_include_directories(CorvoriumEngine PUBLIC ./include PRIVATE ./private)

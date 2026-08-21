@@ -5,7 +5,6 @@ module;
 #include "GLFW/glfw3.h"
 #include "EASTL/hash_map.h"
 #include "EASTL/unique_ptr.h"
-#include "EASTL/vector_map.h"
 
 export module OS:WindowManager;
 import :Window;
@@ -15,12 +14,37 @@ void WindowCloseCallback(GLFWwindow* WindowRaw);
 
 export class CRVM_API WindowManager {
 public:
-    WindowManager() = default;
-    ~WindowManager();
-
-    WindowHandle NewWindow(const WindowCreateParams& Params)
+    WindowManager()
+        : Windows{}
     {
-        auto window = eastl::make_unique<Window>(Params);
+        if (glfwInit())
+        {
+            Initialized = true;
+        }
+    }
+
+    ~WindowManager()
+    {
+        Windows.clear();
+        glfwTerminate();
+    }
+
+    WindowManager(const WindowManager&) = delete;
+    WindowManager(WindowManager&&) = delete;
+    WindowManager& operator=(const WindowManager&) = delete;
+    WindowManager& operator=(WindowManager&&) = delete;
+
+    [[nodiscard]] bool IsInitialized() const
+    {
+        return Initialized;
+    }
+
+    bool IsWindowClosed(const WindowHandle Handle) { return !Windows.contains(Handle); }
+
+    WindowHandle NewWindow(u32 Width, u32 Height, const char* Title)
+    {
+        WindowCreateParams Params{.Manager = this, .Width = Width, .Height = Height, .Title = Title};
+        auto window = eastl::unique_ptr<Window>(new Window(Params));
         auto [it, success] = Windows.try_emplace(window->GetHandle(), eastl::move(window));
         if (success)
         {
@@ -30,7 +54,7 @@ public:
         return {};
     }
 
-    Window* GetWindow(const WindowHandle Handle)
+    Window* GetWindow(const WindowHandle& Handle)
     {
         auto it = Windows.find(Handle);
         if (it != Windows.end())
@@ -40,13 +64,15 @@ public:
         return nullptr;
     }
 
-    void UnregisterWindow(const WindowHandle Handle)
+    void UnregisterWindow(const WindowHandle& Handle)
     {
         Windows.erase(Handle);
     }
 
 private:
-    eastl::hash_map<WindowHandle, eastl::unique_ptr<Window>> Windows;
+    eastl::hash_map<WindowHandle, eastl::unique_ptr<Window>, HandleHash> Windows{};
+
+    bool Initialized{false};
 };
 
 void WindowCloseCallback(GLFWwindow* WindowRaw)
