@@ -9,8 +9,9 @@ module;
 #include "slang/slang-com-ptr.h"
 
 #include <ranges>
+
+#include "common/Assert.hpp"
 module Rendering:ShaderCompiler;
-import :Shader;
 import :Types;
 import Common;
 
@@ -338,8 +339,8 @@ auto CompilationModule::GetShaderEntryPoint(
     slang::IEntryPoint** ppEntryPtr
 ) const -> ResultValue<u32>
 {
-    Assert(!!m_pModule);
-    Assert(!!ppEntryPtr);
+    CRVM_ASSERT(m_pModule);
+    CRVM_ASSERT(ppEntryPtr);
     const auto slangStage = StageToSlangStage(shaderStage);
     Slang::ComPtr<slang::IEntryPoint> pEntryPoint;
     const auto entryPointCount = m_pModule->getDefinedEntryPointCount();

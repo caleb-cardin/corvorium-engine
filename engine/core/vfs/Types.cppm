@@ -3,9 +3,9 @@ module;
 #include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
 
-#include <atomic>
-#include <EASTL/string.h>
-#include <EASTL/vector.h>
+#include "EASTL/string.h"
+#include "EASTL/vector.h"
+#include "EASTL/atomic.h"
 export module VFS:Types;
 import Common;
 
@@ -34,8 +34,8 @@ export enum class VfsError : u32 {
 };
 
 template<typename V>
-using ResultType = ResultValueType<V, VfsError>;
-using ResultError = ResultError<VfsError>;
+using ResultType = Error::ResultValueType<V, VfsError>;
+using ResultError = Error::ResultErrorType<VfsError>;
 
 
 // Assets : TODO Move to some asset reg module
@@ -58,7 +58,7 @@ public:
 
     static AssetHandle NewHandle()
     {
-        return AssetHandle{NextHandle.fetch_add(1, std::memory_order::relaxed)};
+        return AssetHandle{NextHandle.fetch_add(1, eastl::internal::memory_order_relaxed_s{})};
     }
 
     AssetHandle(const AssetHandle& Other) = default;
@@ -72,7 +72,7 @@ public:
     }
 
 private:
-    static std::atomic<u64> NextHandle;
+    static eastl::atomic<u64> NextHandle;
     u64 Handle{kInvalidHandle};
 
     explicit AssetHandle(const u64 NewHandle)
@@ -81,7 +81,7 @@ private:
 };
 
 template<typename T>
-std::atomic<u64> AssetHandle<T>::NextHandle = 0;
+eastl::atomic<u64> AssetHandle<T>::NextHandle = 0;
 
 export template<typename T>
 struct AssetPathTypeTraits {

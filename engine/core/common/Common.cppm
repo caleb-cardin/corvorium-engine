@@ -2,7 +2,6 @@
 module;
 
 export module Common;
-export import :Assert;
 export import :Build;
 export import :Flags;
 export import :Result;

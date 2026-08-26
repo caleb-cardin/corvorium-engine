@@ -1,6 +1,7 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
+#include "common/Assert.hpp"
 
 #include "GLFW/glfw3.h"
 export module OS:Window;
@@ -51,6 +52,17 @@ public:
 
     void SetCallbackData(const WindowCallbackData& InCallbackData) { CallbackData = InCallbackData; }
 
+    /**
+     * @return true if size is valid. false if window is minimized.
+     */
+    [[nodiscard]] void GetFramebufferSize(u32& Width, u32& Height) const
+    {
+        i32 iWidth, iHeight;
+        glfwGetFramebufferSize(pWindow, &iWidth, &iHeight);
+        Width = static_cast<u32>(iWidth);
+        Height = static_cast<u32>(iHeight);
+    }
+
 private:
     friend class WindowManager;
     WindowManager* Manager{nullptr};
@@ -71,7 +83,7 @@ private:
 
     void SetupWindow(u32 Width, u32 Height, const char* Title)
     {
-        Assert(Manager);
+        CRVM_ASSERT(Manager);
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         pWindow = glfwCreateWindow(static_cast<i32>(Width), static_cast<i32>(Height), Title, nullptr, nullptr);
         glfwSetWindowUserPointer(pWindow, this);

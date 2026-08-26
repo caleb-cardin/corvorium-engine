@@ -4,7 +4,7 @@ module;
 #include "common/Logging.hpp"
 #include "vulkan/vulkan.hpp"
 #include "GLFW/glfw3.h"
-module Rendering:VulkanUtils;
+module Rendering:VkUtils;
 import Common;
 import OS;
 
@@ -12,6 +12,9 @@ namespace Corvorium::Rendering::Vulkan {
 Log::Logger VulkanLogger{"VulkanRendering"};
 
 auto& VulkanDispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+
+constexpr u32 kMaxFramesInFlight = 2;
+constexpr u64 kMaxTimeout = UINT64_MAX;
 
 namespace Util {
 vk::SurfaceKHR CreateWindowSurface(const vk::Instance Instance, const OS::Window* Window)

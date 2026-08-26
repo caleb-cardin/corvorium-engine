@@ -3,14 +3,11 @@ module;
 #include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
 
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-
 #include <string>
 #include <memory>
 #include <source_location>
 
+#include "spdlog/logger.h"
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
 

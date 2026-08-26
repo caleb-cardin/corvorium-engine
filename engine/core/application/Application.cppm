@@ -36,20 +36,17 @@ Application::Application(eastl::string&& AppName)
     , WindowManager{eastl::make_unique<Corvorium::OS::WindowManager>()}
     , Rendering{Rendering::RenderContext::CreateRenderContext(Rendering::RenderingAPI::Vulkan)}
 {
-    if (!Rendering->IsInitialized())
-    {
-        return;
-    }
-
     MainWindowHandle = WindowManager->NewWindow(1600, 900, Name.c_str());
-
     if (MainWindowHandle == OS::WindowHandle::kInvalidHandle)
     {
         Rendering.reset();
         return;
     }
 
-    Rendering->InitializeWindow(WindowManager->GetWindow(MainWindowHandle));
+    if (Rendering->Initialize(WindowManager->GetWindow(MainWindowHandle)) != Rendering::RenderError::Success)
+    {
+        return;
+    }
 
     Initialized = true;
 }

@@ -12,7 +12,7 @@ module Rendering:VkContext;
 import :Context;
 import :VkDevice;
 import :Types;
-import :VulkanUtils;
+import :VkUtils;
 
 import Common;
 
@@ -29,12 +29,21 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
     case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
         [[fallthrough]];
     case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+    {
         CRVM_LOG(VulkanLogger, kInfo, "{}", CallbackData->pMessage);
+        break;
+    }
     case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+    {
         CRVM_LOG(VulkanLogger, kWarning, "{}", CallbackData->pMessage);
+        break;
+    }
     case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+    {
         CRVM_LOG(VulkanLogger, kError, "{}", CallbackData->pMessage);
-    default: {}
+        break;
+    }
+    default: { break; }
     }
     return VK_FALSE;
 }
@@ -44,22 +53,36 @@ public:
     VulkanContext();
     ~VulkanContext() override;
 
-    [[nodiscard]] bool IsInitialized() override;
+    [[nodiscard]] RenderError Initialize(OS::Window* MainWindow) override;
+    [[nodiscard]] bool IsInitialized() const override;
     [[nodiscard]] RenderDevice* GetDevice() const override;
 
     void InitializeWindow(OS::Window* Window) override;
 
 private:
     friend class VulkanDevice;
-    vk::Instance Instance = nullptr;
-    vk::DebugUtilsMessengerEXT DebugMessenger;
-    eastl::unique_ptr<VulkanDevice> Device = nullptr;
+    vk::Instance Instance{nullptr};
+    vk::DebugUtilsMessengerEXT DebugMessenger{nullptr};
+    eastl::unique_ptr<VulkanDevice> Device{nullptr};
 
-    bool Initialized = false;
+    bool Initialized{false};
 };
 
 
 VulkanContext::VulkanContext()
+{}
+
+VulkanContext::~VulkanContext()
+{
+    if (IsInitialized())
+    {
+        Device.reset();
+        if constexpr (Build::DebugBuild()) { Instance.destroyDebugUtilsMessengerEXT(DebugMessenger); }
+        Instance.destroy();
+    }
+}
+
+RenderError VulkanContext::Initialize(OS::Window* MainWindow)
 {
     VulkanDispatcher.init();
     vk::detail::DynamicLoader dl;
@@ -111,7 +134,7 @@ VulkanContext::VulkanContext()
     createInfo.pApplicationInfo = &appInfo;
 
     const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo);
-    CRVM_LOG_RETURN_IF(!result.has_value(), /*void*/;, VulkanLogger, kError, "Failed to create Instance.");
+    CRVM_LOG_RETURN_IF(!result.has_value(), RenderError::InitializationError, VulkanLogger, kError, "Failed to create Instance.");
     Instance = result.value;
     VulkanDispatcher.init(Instance);
 
@@ -129,23 +152,14 @@ VulkanContext::VulkanContext()
             CRVM_LOG(VulkanLogger, kError, "Failed to create debug messenger.");
     }
 
-    Device = eastl::make_unique<VulkanDevice>(Instance);
+    Device = eastl::make_unique<VulkanDevice>(Instance, MainWindow);
     VulkanDispatcher.init(Device->GetDevice());
 
     Initialized = true;
+    return RenderError::Success;
 }
 
-VulkanContext::~VulkanContext()
-{
-    if (IsInitialized())
-    {
-        Device.reset();
-        if constexpr (Build::DebugBuild()) { Instance.destroyDebugUtilsMessengerEXT(DebugMessenger); }
-        Instance.destroy();
-    }
-}
-
-bool VulkanContext::IsInitialized()
+bool VulkanContext::IsInitialized() const
 {
     return Initialized;
 }

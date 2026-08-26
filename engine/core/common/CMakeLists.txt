@@ -1,7 +1,6 @@
 target_sources(CorvoriumEngine
         PUBLIC FILE_SET common_interface TYPE CXX_MODULES FILES
         Common.cppm
-        Assert.cppm
         Build.cppm
         Debug.cppm
         Flags.cppm

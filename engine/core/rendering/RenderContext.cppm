@@ -23,7 +23,8 @@ public:
 
     static eastl::unique_ptr<RenderContext> CreateRenderContext(RenderingAPI Api);
 
-    [[nodiscard]] virtual bool IsInitialized() = 0;
+    [[nodiscard]] virtual RenderError Initialize(OS::Window* MainWindow) = 0;
+    [[nodiscard]] virtual bool IsInitialized() const = 0;
     [[nodiscard]] virtual RenderDevice* GetDevice() const = 0;
 
     virtual void InitializeWindow(OS::Window* Window) = 0;

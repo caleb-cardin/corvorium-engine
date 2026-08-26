@@ -1,8 +1,8 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include "spdlog/pattern_formatter.h"
+#include "spdlog/logger.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
 
 #include <source_location>
 #include <string>

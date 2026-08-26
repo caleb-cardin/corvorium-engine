@@ -8,17 +8,13 @@ export module Common:Types;
 import :TypeDefs;
 
 namespace Corvorium {
-export struct HandleHash;
-
 export template<typename T>
 class HandleType {
 public:
     using Handle_t = u64;
     static constexpr Handle_t kInvalidHandle = ~0x0ull;
 
-    HandleType()
-        : Handle{kInvalidHandle}
-    {}
+    HandleType() = default;
 
     ~HandleType() = default;
 
@@ -32,33 +28,29 @@ public:
         return HandleType(NextHandle.fetch_add(1ull, eastl::internal::memory_order_relaxed_s{}));
     }
 
-    bool operator==(const HandleType& Other) const
-    {
-        return Handle == Other.Handle;
-    }
+    bool operator==(const HandleType& Other) const { return Handle == Other.Handle; }
 
-    bool operator==(const Handle_t Other) const
-    {
-        return Handle == Other;
-    }
+    bool operator==(const Handle_t Other) const { return Handle == Other; }
+
+    [[nodiscard]] u64 Get() const { return Handle; }
 
 private:
-    friend struct HandleHash;
     static eastl::atomic<u64> NextHandle;
-    u64 Handle;
+    u64 Handle{};
 
     explicit HandleType(const Handle_t NewHandle)
         : Handle{NewHandle}
     {}
 };
 
-struct HandleHash {
+export struct HandleHash {
     template<typename T>
-    size_t operator()(const HandleType<T>& Handle) const EA_NOEXCEPT
+    size_t operator()(const HandleType<T>& Handle) const
     {
-        return eastl::hash<uint64_t>()(Handle.Handle);
+        return eastl::hash<uint64_t>()(Handle.Get());
     }
 };
+
 
 template<typename T>
 eastl::atomic<u64> HandleType<T>::NextHandle{0};

@@ -1,0 +1,472 @@
+// Copyright © 2026 Caleb Cardin. All rights reserved.
+module;
+#include "common/Assert.hpp"
+#include "common/Logging.hpp"
+#include "EASTL/vector.h"
+#include "vulkan/vulkan.hpp"
+module Rendering:VkSwapchainImpl;
+import :VkSwapchain;
+import :VkDevice;
+
+namespace Corvorium::Rendering::Vulkan {
+static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
+{
+    for (const auto& format: Formats)
+    {
+        if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
+        {
+            return format;
+        }
+    }
+    return Formats[0];
+}
+
+static vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
+{
+    for (const auto& mode: Modes) { if (mode == vk::PresentModeKHR::eMailbox) return mode; }
+    return vk::PresentModeKHR::eFifo;
+}
+
+VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
+{
+    CRVM_ASSERT(Device);
+    CRVM_ASSERT(Params.Window);
+    Surface = Util::CreateWindowSurface(Params.Instance, Window);
+
+    vk::PhysicalDevice physicalDevice = Device->GetPhysicalDevice();
+    vk::ResultValue result = physicalDevice.getSurfaceSupportKHR(Params.PresentQueue, Surface);
+    if (!result.has_value())
+    {
+        CRVM_LOG(VulkanLogger, kError, "Swapchain present not supported for provided queue family.");
+        Params.Instance.destroySurfaceKHR(Surface);
+        return;
+    }
+
+    Initialized = Initialize(Params);
+}
+
+VulkanSwapchain::VulkanSwapchain(vk::SurfaceKHR InSurface)
+    : Surface{InSurface}
+{}
+
+VulkanSwapchain::~VulkanSwapchain()
+{
+    Teardown();
+}
+
+bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
+{
+    Window = Params.Window;
+    Device = Params.Device;
+    QueueFamilyIndices = {Params.GraphicsQueue, Params.PresentQueue};
+
+    OS::WindowCallbackData CallbackData{
+        .ResizeFn = OnWindowResized,
+        .ResizeUserPtr = this,
+        .CloseFn = VulkanDevice::OnWindowClosed,
+        .CloseUserPtr = Device
+    };
+    Params.Window->SetCallbackData(CallbackData);
+
+    vk::CommandPoolCreateInfo cmdPoolInfo;
+    cmdPoolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    cmdPoolInfo.queueFamilyIndex = QueueFamilyIndices.Queues.Graphics;
+
+    vk::Device vkDevice = Device->GetDevice();
+    for (auto& cmdPool: FrameCommandPools)
+    {
+        vk::ResultValue result = vkDevice.createCommandPool(cmdPoolInfo);
+        CRVM_LOG_RETURN_IF(!result.has_value(), false, VulkanLogger, kError, "Failed to create swapchain command pools.");
+        cmdPool = result.value;
+    }
+
+    if (!CreateSyncPrimitives())
+    {
+        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain sync primitives.");
+        Teardown();
+        return false;
+    }
+
+    if (CreateOrRecreateSwapchain() != RenderError::Success)
+    {
+        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain.");
+        Teardown();
+        return false;
+    }
+
+    Initialized = true;
+    return true;
+}
+
+void VulkanSwapchain::Teardown()
+{
+    if (Initialized)
+    {
+        vk::Device vkDevice = Device->GetDevice();
+
+        for (auto view: ImageViews)
+        {
+            vkDevice.destroyImageView(view);
+        }
+        ImageViews.clear();
+        Images.clear();
+
+        if (Swapchain) vkDevice.destroySwapchainKHR(Swapchain);
+
+        for (const auto& cmdPool: FrameCommandPools)
+        {
+            vkDevice.destroyCommandPool(cmdPool);
+        }
+
+        for (const auto& fence: InFlightFences)
+        {
+            vkDevice.destroyFence(fence);
+        }
+        for (const auto& semaphore: ImageAvailableSemaphores)
+        {
+            vkDevice.destroySemaphore(semaphore);
+        }
+        for (const auto& semaphore: FrameCompleteSemaphores)
+        {
+            vkDevice.destroySemaphore(semaphore);
+        }
+
+        if (vk::Instance vulkanInstance = Device->GetInstance(); Surface)
+        {
+            vulkanInstance.destroySurfaceKHR(Surface);
+        }
+        Initialized = false;
+    }
+}
+
+void VulkanSwapchain::GetFramebufferSize(u32& Width, u32& Height) const
+{
+    return Window->GetFramebufferSize(Width, Height);
+}
+
+RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
+{
+    Initialized = false;
+
+    vk::Device vkDevice = Device->GetDevice();
+    if (Swapchain)
+    {
+        Images.clear();
+        for (auto view: ImageViews)
+        {
+            vkDevice.destroyImageView(view);
+            CRVM_LOG(VulkanLogger, kInfo, "ImageView destroyed");
+        }
+        ImageViews.clear();
+    }
+
+    vk::PhysicalDevice vkPhysicalDevice = Device->GetPhysicalDevice();
+
+    vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo;
+    surfaceInfo.surface = Surface;
+    vk::SurfaceCapabilities2KHR surfaceCaps;
+    vk::Result res = vkPhysicalDevice.getSurfaceCapabilities2KHR(&surfaceInfo, &surfaceCaps, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface capabilities.");
+
+    u32 formatCount = 0;
+    res = vkPhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, nullptr, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface formats.");
+    eastl::vector<vk::SurfaceFormat2KHR> surfaceFormats{formatCount, vk::SurfaceFormat2KHR{}};
+    res = vkPhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data(), VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface formats.");
+
+    const vk::SurfaceFormat2KHR selectedFormat = SelectOptimalFormat(surfaceFormats);
+
+    u32 presentModeCount = 0;
+    res = vkPhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, nullptr, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface present modes.");
+    eastl::vector<vk::PresentModeKHR> surfacePresentModes{presentModeCount, vk::PresentModeKHR{}};
+    res = vkPhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data(), VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface present modes.");
+
+    const vk::PresentModeKHR selectedPresentMode = SelectOptimalPresentMode(surfacePresentModes);
+
+    vk::Extent2D extent = surfaceCaps.surfaceCapabilities.currentExtent;
+    if (surfaceCaps.surfaceCapabilities.currentExtent.width == UINT32_MAX ||
+        surfaceCaps.surfaceCapabilities.currentExtent.height == UINT32_MAX)
+    {
+        GetFramebufferSize(extent.width, extent.height);
+
+        eastl::clamp(extent.width,
+                     surfaceCaps.surfaceCapabilities.minImageExtent.width,
+                     surfaceCaps.surfaceCapabilities.maxImageExtent.width);
+        eastl::clamp(extent.height,
+                     surfaceCaps.surfaceCapabilities.minImageExtent.height,
+                     surfaceCaps.surfaceCapabilities.maxImageExtent.height);
+    }
+    if (extent.width == 0 || extent.height == 0)
+    {
+        return RenderError::WindowMinimized;
+    }
+
+    vk::SwapchainCreateInfoKHR info;
+    info.surface = Surface;
+    info.minImageCount = std::min(surfaceCaps.surfaceCapabilities.minImageCount + 1, surfaceCaps.surfaceCapabilities.maxImageCount);
+    info.imageFormat = selectedFormat.surfaceFormat.format;
+    info.imageColorSpace = selectedFormat.surfaceFormat.colorSpace;
+    info.imageExtent = surfaceCaps.surfaceCapabilities.currentExtent;
+    info.imageArrayLayers = 1;
+    info.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+    info.imageSharingMode = IsPresentQueueUnique() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive;
+    info.queueFamilyIndexCount = IsPresentQueueUnique() ? 2 : 1;
+    info.pQueueFamilyIndices = QueueFamilyIndices.QueueFamilies;
+    info.preTransform = surfaceCaps.surfaceCapabilities.currentTransform;
+    info.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    info.presentMode = selectedPresentMode;
+    info.clipped = true;
+    info.oldSwapchain = Swapchain;
+
+    const vk::ResultValue scResult = vkDevice.createSwapchainKHR(info);
+    CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationError, VulkanLogger, kError, "Failed to create swapchain.");
+    Swapchain = scResult.value;
+
+    u32 imageCount;
+    res = vkDevice.getSwapchainImagesKHR(Swapchain, &imageCount, nullptr);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get swapchain images.");
+    Images.resize(imageCount);
+    res = vkDevice.getSwapchainImagesKHR(Swapchain, &imageCount, Images.data());
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get swapchain images.");
+
+    ImageViews.resize(imageCount);
+    for (u32 i = 0; const auto& image: Images)
+    {
+        vk::ImageViewCreateInfo viewInfo;
+        viewInfo.image = image;
+        viewInfo.viewType = vk::ImageViewType::e2D;
+        viewInfo.format = selectedFormat.surfaceFormat.format;
+        viewInfo.components = vk::ComponentMapping{};
+        viewInfo.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+
+        if (auto viewResult = vkDevice.createImageView(viewInfo); viewResult.has_value())
+        {
+            CRVM_LOG_RETURN_IF(!viewResult.has_value(),
+                               RenderError::InitializationError,
+                               VulkanLogger,
+                               kError,
+                               "Failed to create swapchain image views.");
+            ImageViews[i] = viewResult.value;
+        }
+        ++i;
+    }
+
+    bIsOutOfDate = false;
+
+    return RenderError::Success;
+}
+
+bool VulkanSwapchain::CreateSyncPrimitives()
+{
+    vk::Device vkDevice = Device->GetDevice();
+    vk::FenceCreateInfo fenceInfo{};
+    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+    for (auto& fence: InFlightFences)
+    {
+        auto result = vkDevice.createFence(fenceInfo);
+        if (!result.has_value()) return false;
+        fence = result.value;
+    }
+    vk::SemaphoreCreateInfo semaphoreInfo{};
+    for (auto& semaphore: ImageAvailableSemaphores)
+    {
+        auto result = vkDevice.createSemaphore(semaphoreInfo);
+        if (!result.has_value()) return false;
+        semaphore = result.value;
+    }
+    FrameCompleteSemaphores.resize(Images.size());
+    for (auto& semaphore: FrameCompleteSemaphores)
+    {
+        auto result = vkDevice.createSemaphore(semaphoreInfo);
+        if (!result.has_value()) return false;
+        semaphore = result.value;
+    }
+    return true;
+}
+
+void VulkanSwapchain::OnWindowResized(u32 Width, u32 Height, void* Swapchain)
+{
+    auto* swapchain = static_cast<VulkanSwapchain*>(Swapchain);
+    swapchain->bIsOutOfDate = true;
+    if (Width == 0 || Height == 0)
+        swapchain->bIsMinimized = true;
+    else
+        swapchain->bIsMinimized = false;
+}
+
+vk::Result VulkanSwapchain::WaitForFence() const
+{
+    vk::Device vkDevice = Device->GetDevice();
+    vk::Result res = vkDevice.waitForFences(1, &InFlightFences[CurrentFrame], true, kMaxTimeout);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to wait for swapchain fences.");
+    res = vkDevice.resetFences(1, &InFlightFences[CurrentFrame]);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain fences.");
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::AcquireImage()
+{
+    vk::Device vkDevice = Device->GetDevice();
+    vk::ResultValue result = vkDevice.acquireNextImageKHR(Swapchain, kMaxTimeout, ImageAvailableSemaphores[CurrentFrame]);
+    if (result.result == vk::Result::eSuboptimalKHR) bIsOutOfDate = true;
+    CRVM_LOG_RETURN_IF(!result.has_value(),
+                       result.result,
+                       VulkanLogger,
+                       kError,
+                       "Failed to acquire swapchain image.");
+    LastAcquiredImage = result.value;
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::Reset()
+{
+    vk::Device vkDevice = Device->GetDevice();
+    vk::Result res = vkDevice.resetCommandPool(FrameCommandPools[CurrentFrame]);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
+    FrameCommandLists[CurrentFrame].CommandBuffers.clear();
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::InitializedCommandList()
+{
+    vk::CommandBuffer cbBegin;
+    vk::Result res = AllocateCommandBuffer(kOrderPriorityMin, cbBegin);
+
+    vk::CommandBufferBeginInfo beginInfo;
+    res = cbBegin.begin(beginInfo);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
+
+    // Pipeline barrier
+    vk::ImageMemoryBarrier2 imgBarrier;
+    imgBarrier.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+    imgBarrier.srcAccessMask = vk::AccessFlagBits2::eNone;
+    imgBarrier.dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+    imgBarrier.dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;
+    imgBarrier.oldLayout = vk::ImageLayout::eUndefined;
+    imgBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    imgBarrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+    imgBarrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+    imgBarrier.image = GetImage(LastAcquiredImage);
+    imgBarrier.subresourceRange = vk::ImageSubresourceRange{
+        vk::ImageAspectFlagBits::eColor,
+        1u,
+        1u,
+        0u,
+        1u
+    };
+
+    vk::DependencyInfo beginDep;
+    beginDep.imageMemoryBarrierCount = 1u;
+    beginDep.pImageMemoryBarriers = &imgBarrier;
+
+    cbBegin.pipelineBarrier2(beginDep);
+
+    // Dynamic rendering
+    vk::RenderingAttachmentInfo colorAttachInfo;
+    colorAttachInfo.imageView = GetImageView(LastAcquiredImage);
+    colorAttachInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    // TODO : MSAA
+    colorAttachInfo.clearValue = vk::ClearColorValue{0.f, 0.f, 0.f, 0.f};
+
+    vk::RenderingInfo renderInfo;
+    renderInfo.colorAttachmentCount = 1;
+
+    cbBegin.beginRendering(renderInfo);
+
+    // END
+    vk::CommandBuffer cbEnd;
+    res = AllocateCommandBuffer(kOrderPriorityMax, cbEnd);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
+
+    vk::ImageMemoryBarrier2 imgBarrierEnd;
+    imgBarrierEnd.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+    imgBarrierEnd.srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;
+    imgBarrierEnd.dstStageMask = vk::PipelineStageFlagBits2::eNone;
+    imgBarrierEnd.dstAccessMask = vk::AccessFlagBits2::eNone;
+    imgBarrierEnd.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    imgBarrierEnd.newLayout = vk::ImageLayout::ePresentSrcKHR;
+    imgBarrierEnd.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+    imgBarrierEnd.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+    imgBarrierEnd.subresourceRange = vk::ImageSubresourceRange{
+        vk::ImageAspectFlagBits::eColor,
+        1u, 1u, 0u, 1u
+    };
+
+    imgBarrier.image = GetImage(LastAcquiredImage);
+
+    vk::DependencyInfo endDep;
+    endDep.imageMemoryBarrierCount = 1;
+    endDep.pImageMemoryBarriers = &imgBarrier;
+
+    cbEnd.pipelineBarrier2(endDep);
+
+    cbEnd.endRendering();
+
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::AllocateCommandBuffer(i32 Priority, vk::CommandBuffer& OutCmdBuf)
+{
+    vk::CommandBufferAllocateInfo info;
+    info.commandPool = FrameCommandPools[CurrentFrame];
+    info.commandBufferCount = 1;
+
+    vk::Device vkDevice = Device->GetDevice();
+    vk::CommandBuffer Cb;
+    vk::Result res = vkDevice.allocateCommandBuffers(&info, &Cb);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to allocate command buffer.");
+    FrameCommandLists[CurrentFrame].CommandBuffers.emplace_back(FrameCommandList::OrderedBuffer{Priority, Cb});
+    OutCmdBuf = Cb;
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::CompleteFrame(vk::Queue SubmitQueue)
+{
+    FrameCommandLists[CurrentFrame].Sort();
+    const eastl::vector<FrameCommandList::OrderedBuffer>& cmdListBuffers = FrameCommandLists[CurrentFrame].CommandBuffers;
+
+    eastl::vector<vk::CommandBuffer> cmdBuffers;
+    cmdBuffers.reserve(cmdListBuffers.size());
+    eastl::transform(cmdListBuffers.begin(),
+                     cmdListBuffers.end(),
+                     cmdBuffers.begin(),
+                     [](const FrameCommandList::OrderedBuffer& In) {
+                         return In.Cb;
+                     });
+
+    vk::PipelineStageFlags waitFlag = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    vk::SubmitInfo submitInfo;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &ImageAvailableSemaphores[CurrentFrame];
+    submitInfo.pWaitDstStageMask = &waitFlag;
+    submitInfo.commandBufferCount = static_cast<u32>(cmdBuffers.size());
+    submitInfo.pCommandBuffers = cmdBuffers.data();
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &FrameCompleteSemaphores[LastAcquiredImage];
+
+    vk::Result res = SubmitQueue.submit(submitInfo);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to submit commands to queue.");
+
+    vk::PresentInfoKHR presentInfo;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &FrameCompleteSemaphores[LastAcquiredImage];
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &Swapchain;
+    presentInfo.pImageIndices = &LastAcquiredImage;
+    presentInfo.pResults = &res;
+
+    res = SubmitQueue.presentKHR(presentInfo);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR,
+                       res,
+                       VulkanLogger,
+                       kError,
+                       "Failed to submit commands to queue.");
+
+
+    CurrentFrame = (CurrentFrame + 1) % kMaxFramesInFlight;
+    return vk::Result::eSuccess;
+}
+}
