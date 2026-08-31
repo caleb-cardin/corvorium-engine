@@ -3,6 +3,8 @@ module;
 
 #include "EASTL/atomic.h"
 #include "EASTL/functional.h"
+#include "EASTL/sort.h"
+#include "EASTL/vector.h"
 
 export module Common:Types;
 import :TypeDefs;
@@ -11,6 +13,7 @@ namespace Corvorium {
 export template<typename T>
 class HandleType {
 public:
+    using Type = T;
     using Handle_t = u64;
     static constexpr Handle_t kInvalidHandle = ~0x0ull;
 
@@ -32,6 +35,10 @@ public:
 
     bool operator==(const Handle_t Other) const { return Handle == Other; }
 
+    bool operator<(const HandleType& Other) const { return Handle < Other.Handle; }
+
+    bool operator<(const Handle_t Other) const { return Handle < Other; }
+
     [[nodiscard]] u64 Get() const { return Handle; }
 
 private:
@@ -48,6 +55,25 @@ export struct HandleHash {
     size_t operator()(const HandleType<T>& Handle) const
     {
         return eastl::hash<uint64_t>()(Handle.Get());
+    }
+};
+
+export struct MultiHandleHash {
+    template<typename T>
+    size_t operator()(const eastl::vector<HandleType<T>>& Handles)
+    {
+        eastl::vector<HandleType<T>> sorted = Handles;
+        eastl::sort(sorted.begin(),
+                    sorted.end(),
+                    [](const HandleType<T>& Lhs, const HandleType<T>& Rhs) {
+                        return Lhs < Rhs;
+                    });
+        size_t hash = 0;
+        for (const auto& handle: sorted)
+        {
+            hash ^= eastl::hash<uint64_t>()(handle.Get()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        }
+        return hash;
     }
 };
 

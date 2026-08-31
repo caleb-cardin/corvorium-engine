@@ -2,4 +2,5 @@
 module;
 
 export module VFS;
+export import :VirtualFileSystem;
 export import :Types;

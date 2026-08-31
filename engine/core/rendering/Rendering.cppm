@@ -2,6 +2,5 @@
 module;
 #include "CorvoriumApi.h"
 export module Rendering;
-export import :Context;
-export import :Device;
+export import :RenderCore;
 export import :Types;

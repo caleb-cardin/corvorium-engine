@@ -8,18 +8,18 @@ module;
 
 #include <limits>
 
-module Rendering:VkSwapchain;
+module Rendering:VulkanSwapchain;
 import OS;
 import Common;
-import :VkUtils;
+import :VulkanUtils;
 import :Types;
 
 namespace Corvorium::Rendering::Vulkan {
-class VulkanDevice;
+class VulkanCore;
 
 struct VulkanSwapchainCreateParams {
     vk::Instance Instance;
-    VulkanDevice* Device;
+    VulkanCore* Core;
     OS::Window* Window;
     u32 GraphicsQueue;
     u32 PresentQueue;
@@ -93,7 +93,7 @@ public:
     [[nodiscard]] vk::Result CompleteFrame(vk::Queue SubmitQueue);
 
 private:
-    VulkanDevice* Device{nullptr};
+    VulkanCore* Core{nullptr};
     OS::Window* Window{nullptr};
 
     vk::SwapchainKHR Swapchain{nullptr};

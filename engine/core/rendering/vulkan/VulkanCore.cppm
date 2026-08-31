@@ -1,26 +1,17 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 
-#include "common/Logging.hpp"
-
-#include "EASTL/vector.h"
-#include "EASTL/array.h"
 #include "EASTL/hash_map.h"
-#include "EASTL/variant.h"
-
+#include "EASTL/string.h"
 #include "vulkan/vulkan.hpp"
-module Rendering:VkDevice;
-import :Device;
-import :Types;
-import :VkSwapchain;
-import :VkPipeline;
-import :VkUtils;
+export module Rendering:VulkanCore;
+import :RenderCore;
+import :VulkanSwapchain;
+import :VulkanPipeline;
+import :VulkanShaderCache;
 
 namespace Corvorium::Rendering::Vulkan {
-class VulkanCommandBuffer;
-
-
-class VulkanDevice : public RenderDevice {
+class VulkanCore : public IRenderCore {
     struct QueueData {
         u32 FamilyIndex{};
         u32 QueueIndex{};
@@ -29,28 +20,34 @@ class VulkanDevice : public RenderDevice {
     };
 
 public:
-    VulkanDevice() = delete;
-    explicit VulkanDevice(vk::Instance Instance, OS::Window* MainWindow);
-    ~VulkanDevice() override;
+    VulkanCore() = default;
+    ~VulkanCore() override;
 
-    [[nodiscard]] bool IsInitialized() const override;
+    [[nodiscard]] RenderError Initialize(OS::Window* MainWindow, FileSystem::IFileProvider* InFileProvider) override;
+
+    [[nodiscard]] bool IsInitialized() const override { return Initialized; }
+
+    [[nodiscard]] RenderError InitializeWindow(OS::Window* Window) override;
 
     [[nodiscard]] RenderError BeginFrame(OS::WindowHandle Window) override;
-    [[nodiscard]] ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority);
+    [[nodiscard]] ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority) override;
     [[nodiscard]] RenderError EndFrame(OS::WindowHandle Window) override;
+
+    [[nodiscard]] ResultValue<ShaderHandle> CreateShaderModule(const eastl::string& Name) override;
+    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(ShaderHandle Shader) override;
 
     [[nodiscard]] vk::Instance GetInstance() const { return Instance; }
     [[nodiscard]] vk::PhysicalDevice GetPhysicalDevice() const { return PhysicalDevice; }
     [[nodiscard]] vk::Device GetDevice() const { return Device; }
 
-    bool CreateSwapchainForWindow(OS::Window* InWindow);
     static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
-
 
     [[nodiscard]] vk::Pipeline FindPipeline(PipelineHandle Pipeline);
 
 private:
+    FileSystem::IFileProvider* FileProvider{nullptr};
     vk::Instance Instance{nullptr};
+    vk::DebugUtilsMessengerEXT DebugMessenger{nullptr};
     bool Initialized{false};
 
     vk::PhysicalDevice PhysicalDevice{nullptr};
@@ -64,8 +61,11 @@ private:
 
     eastl::hash_map<OS::WindowHandle, VulkanSwapchain, HandleHash> Swapchains{};
 
+    eastl::unique_ptr<VulkanShaderCache> ShaderCache{};
+
     eastl::hash_map<PipelineHandle, VulkanPipeline, HandleHash> Pipelines{};
 
+    [[nodiscard]] bool InitInstance();
     [[nodiscard]] bool SelectPhysicalDevice();
     [[nodiscard]] bool InitDevice();
     [[nodiscard]] bool InitPipelineCache();

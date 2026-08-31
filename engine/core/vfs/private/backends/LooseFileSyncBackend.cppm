@@ -9,25 +9,28 @@ module;
 module VFS:LooseFileSyncBackend;
 import :BackendInterface;
 import :Types;
+import OS;
+
+using namespace Corvorium::FileSystem;
 
 namespace Corvorium::VFS {
 extern Log::Logger VfsLogger;
 
 class LooseFileSyncBackend : public IVFSBackend {
 public:
-    [[nodiscard]] ResultType<ByteArray> ReadFile(const PhysicalPath& Path) noexcept override;
-    [[nodiscard]] VfsError WriteFile(const PhysicalPath& Path, const ByteArray& Bytes) noexcept override;
+    [[nodiscard]] ResultValue<ByteArray> ReadFile(const PhysicalPath& Path) noexcept override;
+    [[nodiscard]] FileError WriteFile(const PhysicalPath& Path, const ByteArray& Bytes) noexcept override;
     [[nodiscard]] bool Exists(const PhysicalPath& Path) override;
 };
 
-ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) noexcept
+ResultValue<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) noexcept
 {
     CRVM_LOG_RETURN_IF(!Exists(Path),
-                       ResultError(VfsError::FileNotFound),
+                       ResultError(FileError::FileNotFound),
                        VfsLogger,
                        kError,
                        "Read file failed: {}",
-                       ToCStr(VfsError::FileNotFound));
+                       ToCStr(FileError::FileNotFound));
 
     const std::filesystem::path path{Path.c_str()};
 
@@ -35,7 +38,7 @@ ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) n
     file.open(path, std::ios::in | std::ios::binary);
 
     CRVM_LOG_RETURN_IF(!file.is_open(),
-                       ResultError(VfsError::Unknown),
+                       ResultError(FileError::InternalError),
                        VfsLogger,
                        kError,
                        "Failed to open file for read: {}",
@@ -46,7 +49,7 @@ ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) n
     file.seekg(0, std::ios::beg);
     bytes.resize(size);
     CRVM_LOG_RETURN_IF(!file.read(reinterpret_cast<char*>(bytes.data()), size),
-                       ResultError(VfsError::Unknown),
+                       ResultError(FileError::InternalError),
                        VfsLogger,
                        kError,
                        "Failed to read file : {}",
@@ -54,14 +57,14 @@ ResultType<ByteArray> LooseFileSyncBackend::ReadFile(const PhysicalPath& Path) n
     return std::move(bytes);
 }
 
-VfsError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArray& Bytes) noexcept
+FileError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArray& Bytes) noexcept
 {
     CRVM_LOG_RETURN_IF(!Exists(Path),
-                       VfsError::FileNotFound,
+                       FileError::FileNotFound,
                        VfsLogger,
                        kError,
                        "Write file failed: {}",
-                       ToCStr(VfsError::FileNotFound));
+                       ToCStr(FileError::FileNotFound));
 
     const std::filesystem::path path{Path.c_str()};
 
@@ -69,7 +72,7 @@ VfsError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArr
     file.open(path, std::ios::out | std::ios::binary);
 
     CRVM_LOG_RETURN_IF(!file.is_open(),
-                       VfsError::Internal,
+                       FileError::InternalError,
                        VfsLogger,
                        kError,
                        "Failed to open file for write: {}",
@@ -77,13 +80,13 @@ VfsError LooseFileSyncBackend::WriteFile(const PhysicalPath& Path, const ByteArr
 
 
     CRVM_LOG_RETURN_IF(!file.write(reinterpret_cast<const char*>(Bytes.data()), Bytes.size()),
-                       VfsError::Internal,
+                       FileError::InternalError,
                        VfsLogger,
                        kError,
                        "Failed to write file : {}",
                        path.string());
 
-    return VfsError::Success;
+    return FileError::Success;
 }
 
 bool LooseFileSyncBackend::Exists(const PhysicalPath& Path)

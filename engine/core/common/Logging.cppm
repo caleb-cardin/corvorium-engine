@@ -38,7 +38,7 @@ namespace Log {
 export class CRVM_API Logger {
 public:
     Logger() = delete;
-    explicit Logger(eastl::string&& Name);
+    explicit Logger(const eastl::string& Name);
 
     ~Logger();
 

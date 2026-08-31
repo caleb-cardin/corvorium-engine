@@ -9,15 +9,15 @@ target_link_libraries(CorvoriumEngine
 target_sources(CorvoriumEngine
         PRIVATE
         Vulkan.cpp
-        PRIVATE FILE_SET rendering_impl TYPE CXX_MODULES FILES
-        VulkanContext.cppm
-        VulkanDevice.cppm
+        PRIVATE FILE_SET vulkan_impl TYPE CXX_MODULES FILES
+        VulkanCore.cppm
         VulkanPipeline.cppm
         VulkanPipelineUtils.cppm
         VulkanSwapchain.cppm
+        VulkanShaderCache.cppm
         VulkanCommandBuffer.cppm
         VulkanUtils.cppm
 
-        private/VulkanDevice.cppm
+        private/VulkanCore.cppm
         private/VulkanSwapchain.cppm
 )

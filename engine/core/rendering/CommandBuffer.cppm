@@ -8,7 +8,7 @@ import :Types;
 
 namespace Corvorium::Rendering {
 namespace Vulkan {
-class VulkanDevice;
+class VulkanCore;
 }
 
 struct CommandBufferImpl;
@@ -28,7 +28,7 @@ public:
     void End();
 
 private:
-    friend class Vulkan::VulkanDevice;
+    friend class Vulkan::VulkanCore;
     eastl::unique_ptr<CommandBufferImpl> pImpl{nullptr};
 
     explicit CommandBuffer(eastl::unique_ptr<CommandBufferImpl>&& Impl);

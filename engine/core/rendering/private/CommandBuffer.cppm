@@ -4,12 +4,14 @@ module;
 #include "EASTL/variant.h"
 module Rendering:CommandBufferImpl;
 import :CommandBuffer;
-import :VkCommandBuffer;
+import :VulkanCommandBuffer;
 
 #define CB_CALL(_fn, ...) eastl::visit([&](auto& Cb) { Cb._fn(__VA_ARGS__); }, pImpl->CmdBuf)
 
 namespace Corvorium::Rendering {
+
 struct CommandBufferImpl {
+public:
     explicit CommandBufferImpl(Vulkan::VulkanCommandBuffer&& VkCb)
         : CmdBuf{VkCb}
     {}
@@ -19,8 +21,10 @@ struct CommandBufferImpl {
     eastl::variant<Vulkan::VulkanCommandBuffer> CmdBuf;
 };
 
+
 CommandBuffer::CommandBuffer(CommandBuffer&&) noexcept = default;
 CommandBuffer& CommandBuffer::operator=(CommandBuffer&&) noexcept = default;
+
 CommandBuffer::~CommandBuffer() = default;
 
 CommandBuffer::CommandBuffer(eastl::unique_ptr<CommandBufferImpl>&& Impl)

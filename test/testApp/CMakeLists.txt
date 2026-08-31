@@ -3,7 +3,16 @@ add_executable(CorvoriumTestApp)
 
 target_sources(CorvoriumTestApp PRIVATE TestApp.cpp)
 
+target_compile_definitions(CorvoriumTestApp PRIVATE CORVORIUM_RESOURCES_DIR=${CMAKE_CORVORIUM_RESOURCES_DIR})
+
 target_link_libraries(CorvoriumTestApp PRIVATE CorvoriumEngine)
+
+add_custom_target(CopyCorvoriumResources ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CORVORIUM_RESOURCES_DIR}"
+        "$<TARGET_FILE_DIR:CorvoriumTestApp>/resources"
+)
+add_dependencies(CorvoriumTestApp CopyCorvoriumResources)
 
 set(RUNTIME_DEPS
         CorvoriumEngine

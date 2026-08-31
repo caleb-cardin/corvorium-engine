@@ -17,65 +17,67 @@ VirtualFileSystem::VirtualFileSystem()
 
 VirtualFileSystem::~VirtualFileSystem() = default;
 
-template<AssetType T>
-void VirtualFileSystem::Mount(const eastl::string& PhysicalPath)
+void VirtualFileSystem::Mount(const eastl::string& PhysicalPath, const eastl::string& Name)
 {
-    CRVM_LOG_RETURN_IF(pMountTable->IsMounted(AssetPathTypeTraits<T>::Name),
+    CRVM_LOG_RETURN_IF(pMountTable->IsMounted(Name),
                        /*void*/
                        ;,
                        VfsLogger,
                        kError,
                        "Attempted to mount and existing asset.");
 
-    pMountTable->Mount(AssetPathTypeTraits<T>::Name, pBackend.get(), PhysicalPath);
+    pMountTable->Mount(Name, pBackend.get(), PhysicalPath);
 }
 
-ResultType<ByteArray> VirtualFileSystem::ReadFile(const char* Path) const
+ResultValue<eastl::vector<u8>> VirtualFileSystem::ReadFile(const eastl::string& Path) const
 {
     VirtualPathInfo info;
-    if (const auto err = Resolve(Path, info); err != VfsError::Success)
+    if (const auto err = Resolve(Path, info); err != FileError::Success)
     {
         return ResultError(err);
     }
     if (!(info.Flags & MountFlagBits::Read))
     {
-        return ResultError(VfsError::PermissionDenied);
+        return ResultError(FileError::PermissionDenied);
     }
 
     return info.Backend->ReadFile(info.PhysicalPath);
 }
 
-ResultType<ByteArray> VirtualFileSystem::ReadFile(const eastl::string& Path) const
-{
-    return ReadFile(Path.c_str());
-}
-
-VfsError VirtualFileSystem::WriteFile(const char* Path, const ByteArray& Bytes) const
+FileError VirtualFileSystem::WriteFile(const char* Path, const ByteArray& Bytes) const
 {
     return WriteFile(eastl::string{Path}, Bytes);
 }
 
-VfsError VirtualFileSystem::WriteFile(const eastl::string& Path, const ByteArray& Bytes) const
+FileError VirtualFileSystem::WriteFile(const eastl::string& Path, const ByteArray& Bytes) const
 {
     VirtualPathInfo info;
-    if (const auto err = Resolve(Path, info); err != VfsError::Success)
+    if (const auto err = Resolve(Path, info); err != FileError::Success)
     {
         return err;
     }
     if (!(info.Flags & MountFlagBits::Write))
     {
-        return VfsError::PermissionDenied;
+        return FileError::PermissionDenied;
     }
 
     return info.Backend->WriteFile(Path, Bytes);
 }
 
-VfsError VirtualFileSystem::Resolve(const VirtualPath& Path, VirtualPathInfo& PathInfo) const
+ResultValue<eastl::string> VirtualFileSystem::ResolveVirtualPath(const VirtualPath& Path) const
 {
-    auto result = pMountTable->Resolve(Path);
+    VirtualPathInfo info;
+    FileError err = Resolve(Path, info);
+    CRVM_LOG_RETURN_IF(err != FileError::Success, ResultError(err), VfsLogger, kError, "Failed to resolve path {}", Path.c_str());
+    return eastl::move(info.PhysicalPath);
+}
+
+FileError VirtualFileSystem::Resolve(const VirtualPath& Path, VirtualPathInfo& PathInfo) const
+{
+    ResultValue<VirtualPathInfo> result = pMountTable->Resolve(Path);
     if (!result.has_value()) return result.error();
 
     PathInfo = std::move(result.value());
-    return VfsError::Success;
+    return FileError::Success;
 }
 }

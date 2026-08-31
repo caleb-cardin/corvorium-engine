@@ -4,10 +4,16 @@ module;
 #include "EASTL/variant.h"
 
 #include "vulkan/vulkan.hpp"
-module Rendering:VkPipeline;
+module Rendering:VulkanPipeline;
+import :VulkanPipelineUtils;
+import :Types;
 import Common;
 
 namespace Corvorium::Rendering::Vulkan {
+struct PipelineCreateParamsBase {
+    eastl::vector<ShaderHandle> Shaders;
+};
+
 struct GraphicsPipelineCreateParams {};
 
 struct ComputePipelineCreateParams {};
@@ -51,9 +57,11 @@ VulkanPipeline::VulkanPipeline(vk::Device InDevice,
     : Type{PipelineType::Graphics}
     , Device{InDevice}
 {
-    vk::ComputePipelineCreateInfo info;
+    vk::GraphicsPipelineCreateInfo info;
+    GraphicsPipelineDescBuilder builder;
 
-    auto result = Device.createComputePipeline(Cache, info);
+
+    auto result = Device.createGraphicsPipeline(Cache, info);
 }
 
 

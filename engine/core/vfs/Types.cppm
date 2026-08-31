@@ -8,9 +8,12 @@ module;
 #include "EASTL/atomic.h"
 export module VFS:Types;
 import Common;
+import OS;
+
+using namespace Corvorium::FileSystem;
 
 namespace Corvorium::VFS {
-export using ByteArray = eastl::vector<std::byte>;
+export using ByteArray = eastl::vector<u8>;
 export using VirtualPath = eastl::string;
 export using PhysicalPath = eastl::string;
 
@@ -20,23 +23,6 @@ export enum class MountFlagBits : u8 {
     Read = 0x1 << 0,
     Write = 0x1 << 1
 };
-
-export enum class VfsError : u32 {
-    Success = 0,
-    FileNotFound,
-    PermissionDenied,
-    NotADirectory,
-    IsADirectory,
-    NameLength,
-
-    Internal,
-    Unknown,
-};
-
-template<typename V>
-using ResultType = Error::ResultValueType<V, VfsError>;
-using ResultError = Error::ResultErrorType<VfsError>;
-
 
 // Assets : TODO Move to some asset reg module
 
@@ -83,33 +69,21 @@ private:
 template<typename T>
 eastl::atomic<u64> AssetHandle<T>::NextHandle = 0;
 
-export template<typename T>
-struct AssetPathTypeTraits {
-    using Type = T;
-    using Handle = AssetHandle<T>;
-    static constexpr const char* Name = nullptr;
-};
-
-export template<typename T>
-concept AssetType = requires {
-    { AssetPathTypeTraits<T>::Name != nullptr };
-};
-
-const char* ToCStr(const VfsError Error)
+const char* ToCStr(const FileError Error)
 {
     switch (Error)
     {
-    case VfsError::Success:
+    case FileError::Success:
         return "Success";
-    case VfsError::FileNotFound:
+    case FileError::FileNotFound:
         return "FileNotFound";
-    case VfsError::PermissionDenied:
+    case FileError::PermissionDenied:
         return "PermissionDenied";
-    case VfsError::NotADirectory:
+    case FileError::NotADirectory:
         return "NotADirectory";
-    case VfsError::IsADirectory:
+    case FileError::IsADirectory:
         return "IsADirectory";
-    case VfsError::NameLength:
+    case FileError::NameLength:
         return "NameLength";
     default:
         return "Unknown";

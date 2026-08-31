@@ -10,4 +10,6 @@ project(CorvoriumEngine CXX)
 add_subdirectory(lib SYSTEM)
 add_subdirectory(engine)
 
+set(CMAKE_CORVORIUM_RESOURCES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+
 add_subdirectory(test/testApp)

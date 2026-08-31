@@ -1,27 +1,44 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
-
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
 
 #include "EASTL/hash_map.h"
-#include "EASTL/variant.h"
+#include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
+#include "EASTL/variant.h"
 
 #include "vulkan/vulkan.hpp"
-module Rendering:VkDeviceImpl;
-import :VkDevice;
-import :VkCommandBuffer;
+module Rendering:VulkanCoreImpl;
+import :VulkanCore;
 import :CommandBufferImpl;
+import :VulkanCommandBuffer;
+import :VulkanSwapchain;
+import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
-VulkanDevice::VulkanDevice(vk::Instance Instance, OS::Window* MainWindow)
-    : Instance{Instance}
+VulkanCore::~VulkanCore()
 {
+    Teardown();
+}
+
+RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProvider* InFileProvider)
+{
+    CRVM_ASSERT(MainWindow);
+    CRVM_ASSERT(InFileProvider);
+
+    FileProvider = InFileProvider;
+
+    if (!InitInstance())
+    {
+        Teardown();
+        return RenderError::InitializationFailed;
+    }
+
     if (!SelectPhysicalDevice())
     {
         Teardown();
-        return;
+        return RenderError::InitializationFailed;
     }
 
     vk::SurfaceKHR MainSurface = Util::CreateWindowSurface(Instance, MainWindow);
@@ -29,50 +46,68 @@ VulkanDevice::VulkanDevice(vk::Instance Instance, OS::Window* MainWindow)
     if (!PresentFound)
     {
         Instance.destroySurfaceKHR(MainSurface);
-        return;
+        return RenderError::InitializationFailed;
     }
 
     auto [scIter, success] = Swapchains.try_emplace(MainWindow->GetHandle(), VulkanSwapchain::CreateUninitializedSwapchain(MainSurface));
     if (!success)
     {
         Instance.destroySurfaceKHR(MainSurface);
-        return;
+        Teardown();
+        return RenderError::InitializationFailed;
     }
 
     if (!InitDevice())
     {
         Teardown();
-        return;
+        return RenderError::InitializationFailed;
     }
 
-    bool swapchainInitialized = scIter->second.Initialize({
+    ShaderCache = eastl::make_unique<VulkanShaderCache>(Device, FileProvider);
+
+    bool swapchainInitialized = scIter->second.Initialize(VulkanSwapchainCreateParams{
         .Instance = Instance,
-        .Device = this,
+        .Core = this,
         .Window = MainWindow,
         .GraphicsQueue = GraphicsQueue.FamilyIndex,
         .PresentQueue = PresentQueueFamily
     });
+
     if (!swapchainInitialized)
     {
         Teardown();
-        return;
+        return RenderError::InitializationFailed;
     }
 
     Initialized = true;
+    return RenderError::Success;
 }
 
-VulkanDevice::~VulkanDevice()
+RenderError VulkanCore::InitializeWindow(OS::Window* Window)
 {
-    Teardown();
+    if (Swapchains.contains(Window->GetHandle()))
+    {
+        return RenderError::AlreadyInitialized;
+    }
+
+    VulkanSwapchainCreateParams params{
+        .Instance = Instance,
+        .Core = this,
+        .Window = Window,
+        .GraphicsQueue = GraphicsQueue.FamilyIndex,
+        .PresentQueue = PresentQueueFamily
+    };
+
+    auto [_, success] = Swapchains.try_emplace(Window->GetHandle(), VulkanSwapchain::CreateInitializedSwapchain(params));
+    if (!success)
+    {
+        return RenderError::InitializationFailed;
+    }
+
+    return RenderError::Success;
 }
 
-
-bool VulkanDevice::IsInitialized() const
-{
-    return Initialized;
-}
-
-RenderError VulkanDevice::BeginFrame(OS::WindowHandle Window)
+RenderError VulkanCore::BeginFrame(OS::WindowHandle Window)
 {
     auto it = Swapchains.find(Window);
     CRVM_LOG_RETURN_IF(it == Swapchains.end(),
@@ -115,7 +150,7 @@ RenderError VulkanDevice::BeginFrame(OS::WindowHandle Window)
     return RenderError::Success;
 }
 
-ResultValue<CommandBuffer> VulkanDevice::AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority)
+ResultValue<CommandBuffer> VulkanCore::AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority)
 {
     auto it = Swapchains.find(Window);
     CRVM_LOG_RETURN_IF(it == Swapchains.end(),
@@ -136,7 +171,7 @@ ResultValue<CommandBuffer> VulkanDevice::AllocateCommandBuffer(OS::WindowHandle 
     return CommandBuffer{eastl::make_unique<CommandBufferImpl>(VulkanCommandBuffer{this, cb})};
 }
 
-RenderError VulkanDevice::EndFrame(OS::WindowHandle Window)
+RenderError VulkanCore::EndFrame(OS::WindowHandle Window)
 {
     auto it = Swapchains.find(Window);
     CRVM_LOG_RETURN_IF(it == Swapchains.end(),
@@ -152,42 +187,26 @@ RenderError VulkanDevice::EndFrame(OS::WindowHandle Window)
     return RenderError::Success;
 }
 
-// TODO : This function has multiple fail states, consider proper error returns.
-/**
- * CreateSwapchainForWindow
- * @param InWindow Window handle to create the swapchain surface from
- * @return true if swapchain was created, false if swapchain already exists for the given window
- */
-bool VulkanDevice::CreateSwapchainForWindow(OS::Window* InWindow)
+ResultValue<ShaderHandle> VulkanCore::CreateShaderModule(const eastl::string& Name)
 {
-    if (Swapchains.contains(InWindow->GetHandle()))
+    auto result = ShaderCache->GetOrCreateShader(Name);
+    if (result.has_value())
     {
-        // TODO : Error, disallow multiple SC for singular window
-        return false;
+        return result.value()->Handle;
     }
-
-    VulkanSwapchainCreateParams params{
-        .Instance = Instance,
-        .Device = this,
-        .Window = InWindow,
-        .GraphicsQueue = GraphicsQueue.FamilyIndex,
-        .PresentQueue = PresentQueueFamily
-    };
-
-    auto [_, success] = Swapchains.try_emplace(InWindow->GetHandle(), VulkanSwapchain::CreateInitializedSwapchain(params));
-    if (!success)
-    {
-        return false;
-    }
-
-    return true;
+    return ResultError(RenderError::InternalError);
 }
 
-void VulkanDevice::OnWindowClosed(OS::Window* Window, void* OwningDevice)
+ResultValue<PipelineHandle> VulkanCore::CreatePipeline(ShaderHandle Shader)
+{
+    return ResultError(RenderError::InternalError);
+}
+
+void VulkanCore::OnWindowClosed(OS::Window* Window, void* OwningDevice)
 {
     CRVM_ASSERT(Window);
     CRVM_ASSERT(OwningDevice);
-    auto* Device = static_cast<VulkanDevice*>(OwningDevice);
+    auto* Device = static_cast<VulkanCore*>(OwningDevice);
     const OS::WindowHandle handle = Window->GetHandle();
     if (Device->Swapchains.contains(handle))
     {
@@ -195,7 +214,7 @@ void VulkanDevice::OnWindowClosed(OS::Window* Window, void* OwningDevice)
     }
 }
 
-vk::Pipeline VulkanDevice::FindPipeline(PipelineHandle Pipeline)
+vk::Pipeline VulkanCore::FindPipeline(PipelineHandle Pipeline)
 {
     auto it = Pipelines.find(Pipeline);
     if (it != Pipelines.end())
@@ -205,7 +224,79 @@ vk::Pipeline VulkanDevice::FindPipeline(PipelineHandle Pipeline)
     return nullptr;
 }
 
-bool VulkanDevice::SelectPhysicalDevice()
+bool VulkanCore::InitInstance()
+{
+    VulkanDispatcher.init();
+    vk::detail::DynamicLoader dl;
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    VulkanDispatcher.init(vkGetInstanceProcAddr);
+
+    vk::ApplicationInfo appInfo;
+    appInfo.apiVersion = vk::makeApiVersion(0, 1, 4, 0);
+    appInfo.pApplicationName = ""; // TODO
+    appInfo.applicationVersion = vk::makeApiVersion(0, CORVORIUM_VERSION_MAJOR, CORVORIUM_VERSION_MINOR, CORVORIUM_VERSION_PATCH);
+    appInfo.pEngineName = "Corvorium Engine";
+    appInfo.engineVersion = vk::makeApiVersion(0, CORVORIUM_VERSION_MAJOR, CORVORIUM_VERSION_MINOR, CORVORIUM_VERSION_PATCH);
+
+    constexpr const char* instanceExtensions[] = {
+        "VK_KHR_surface",
+#ifdef CORVORIUM_WINDOWS
+        "VK_KHR_win32_surface",
+#else
+        "VK_KHR_wayland_surface",
+#endif
+#ifdef CORVORIUM_DEBUG
+        "VK_EXT_debug_utils",
+        "VK_KHR_get_surface_capabilities2"
+#endif
+    };
+
+#ifndef CORVORIUM_DEBUG
+    constexpr u32 instanceExtCount = 3;
+#else
+    constexpr u32 instanceExtCount = 4;
+#endif
+
+
+#ifdef CORVORIUM_DEBUG
+    constexpr u32 instanceLayerCount = 1;
+    constexpr const char* instanceLayers[] = {
+        "VK_LAYER_KHRONOS_validation"
+    };
+#else
+    constexpr u32 instanceLayerCount = 0;
+    constexpr const char** instanceLayers = nullptr;
+#endif
+
+    vk::InstanceCreateInfo createInfo;
+    createInfo.enabledExtensionCount = instanceExtCount;
+    createInfo.ppEnabledExtensionNames = instanceExtensions;
+    createInfo.enabledLayerCount = instanceLayerCount;
+    createInfo.ppEnabledLayerNames = instanceLayers;
+    createInfo.pApplicationInfo = &appInfo;
+
+    const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo);
+    CRVM_LOG_RETURN_IF(!result.has_value(), false, VulkanLogger, kError, "Failed to create Instance.");
+    Instance = result.value;
+    VulkanDispatcher.init(Instance);
+
+    vk::DebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
+    debugMessengerInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+    debugMessengerInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                     vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+    debugMessengerInfo.pfnUserCallback = Util::DebugCallback;
+
+    if constexpr (Build::DebugBuild())
+    {
+        vk::Result res = Instance.createDebugUtilsMessengerEXT(&debugMessengerInfo, nullptr, &DebugMessenger, VulkanDispatcher);
+        if (res != vk::Result::eSuccess)
+            CRVM_LOG(VulkanLogger, kError, "Failed to create debug messenger.");
+    }
+
+    return true;
+}
+
+bool VulkanCore::SelectPhysicalDevice()
 {
     u32 deviceCount = 0;
     vk::Result res = Instance.enumeratePhysicalDevices(&deviceCount, nullptr);
@@ -256,7 +347,7 @@ bool VulkanDevice::SelectPhysicalDevice()
     return true;
 }
 
-bool VulkanDevice::InitDevice()
+bool VulkanCore::InitDevice()
 {
     eastl::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
     auto queueInfos = CreateQueueInfos(queueCreateInfos);
@@ -375,10 +466,12 @@ bool VulkanDevice::InitDevice()
     Device.getQueue(queueInfos[0].FamilyIndex, queueInfos[0].QueueIndex, &GraphicsQueue.Queue);
     Device.getQueue(queueInfos[1].FamilyIndex, queueInfos[1].QueueIndex, &TransferQueue.Queue);
 
+    VulkanDispatcher.init(Device);
+
     return true;
 }
 
-bool VulkanDevice::InitPipelineCache()
+bool VulkanCore::InitPipelineCache()
 {
     eastl::vector<u8> pipelineCacheData = LoadPipelineCacheData();
 
@@ -393,8 +486,9 @@ bool VulkanDevice::InitPipelineCache()
     return false;
 }
 
-void VulkanDevice::Teardown()
+void VulkanCore::Teardown()
 {
+    ShaderCache.reset();
     Swapchains.clear();
     if (Device)
     {
@@ -402,9 +496,18 @@ void VulkanDevice::Teardown()
         Device = nullptr;
     }
     PhysicalDevice = nullptr;
+    if (DebugMessenger)
+    {
+        Instance.destroyDebugUtilsMessengerEXT(DebugMessenger);
+        DebugMessenger = nullptr;
+    }
+    if (Instance)
+    {
+        Instance.destroy();
+    }
 }
 
-bool VulkanDevice::FindPresentQueueFamily(vk::SurfaceKHR Surface, u32& OutPresentFamily) const
+bool VulkanCore::FindPresentQueueFamily(vk::SurfaceKHR Surface, u32& OutPresentFamily) const
 {
     u32 nQueueFamilies = 0;
     PhysicalDevice.getQueueFamilyProperties2(&nQueueFamilies, nullptr);
@@ -419,7 +522,7 @@ bool VulkanDevice::FindPresentQueueFamily(vk::SurfaceKHR Surface, u32& OutPresen
     return false;
 }
 
-eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos) const
+eastl::vector<VulkanCore::QueueData> VulkanCore::CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos) const
 {
     u32 nQueueFamilies = 0;
     PhysicalDevice.getQueueFamilyProperties2(&nQueueFamilies, nullptr);
@@ -493,12 +596,12 @@ eastl::vector<VulkanDevice::QueueData> VulkanDevice::CreateQueueInfos(eastl::vec
     };
 }
 
-bool VulkanDevice::IsTransferQueueConcurrent() const
+bool VulkanCore::IsTransferQueueConcurrent() const
 {
     return GraphicsQueue.FamilyIndex != TransferQueue.FamilyIndex;
 }
 
-eastl::vector<u8> VulkanDevice::LoadPipelineCacheData() const
+eastl::vector<u8> VulkanCore::LoadPipelineCacheData() const
 {
     return {}; // TODO : IO pipeline cache
 }

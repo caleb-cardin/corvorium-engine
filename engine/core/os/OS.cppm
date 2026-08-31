@@ -2,5 +2,6 @@
 module;
 
 export module OS;
+export import :FileProvider;
 export import :Window;
 export import :WindowManager;

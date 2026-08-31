@@ -11,7 +11,7 @@ module;
 
 module Rendering:VulkanPipelineUtils;
 import Common;
-import :VkUtils;
+import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
 namespace {
@@ -158,7 +158,7 @@ public:
         return AddSingleShader(Shader, StageInfo.Stage, StageInfo.EntryPoint);
     }
 
-    GraphicsPipelineDescBuilder& AddMultiShader(vk::ShaderModule Shader, const eastl::span<ShaderStageInfo>& StageInfos)
+    GraphicsPipelineDescBuilder& AddMultiShader(vk::ShaderModule Shader, eastl::span<ShaderStageInfo> StageInfos)
     {
         for (const auto& info: StageInfos)
         {

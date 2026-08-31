@@ -10,6 +10,9 @@ module;
 module VFS:MountTable;
 import :BackendInterface;
 import :Types;
+import OS;
+
+using namespace Corvorium::FileSystem;
 
 namespace Corvorium::VFS {
 extern Log::Logger VfsLogger;
@@ -73,7 +76,7 @@ public:
         return Mount(eastl::string{Prefix}, Backend, PhysicalPath, Flags);
     }
 
-    ResultType<VirtualPathInfo> Resolve(const VirtualPath& Path)
+    ResultValue<VirtualPathInfo> Resolve(const VirtualPath& Path)
     {
         const auto index = Path.find_first_of(kMountPathDelimiter) + kMountPathDelimiterSize;
         const eastl::string prefix = Path.substr(0, index);
@@ -86,6 +89,7 @@ public:
             IVFSBackend* pBackend = it->second.Backend;
 
             std::filesystem::path fsPath = it->second.PhysicalPath.c_str();
+
             fsPath /= physicalSubpath.c_str();
 
             if (std::filesystem::exists(fsPath))
@@ -100,7 +104,7 @@ public:
 
         CRVM_LOG(VfsLogger, kWarning, "Resource \"{}\" could not be resolved.", Path.c_str());
 
-        return ResultError(VfsError::FileNotFound);
+        return ResultError(FileError::FileNotFound);
     }
 
 private:

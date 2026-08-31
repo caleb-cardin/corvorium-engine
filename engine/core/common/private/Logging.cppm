@@ -55,8 +55,8 @@ spdlog::logger* Logger::operator->() const
     return pImpl->Get();
 }
 
-Logger::Logger(eastl::string&& Name)
-    : pImpl{eastl::make_unique<Impl>(eastl::move(Name))}
+Logger::Logger(const eastl::string& Name)
+    : pImpl{eastl::make_unique<Impl>(Name)}
 {}
 
 Logger::~Logger() = default;

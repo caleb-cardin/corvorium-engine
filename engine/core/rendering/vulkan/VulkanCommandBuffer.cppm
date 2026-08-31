@@ -3,17 +3,19 @@ module;
 #include "common/Logging.hpp"
 
 #include "vulkan/vulkan.hpp"
-module Rendering:VkCommandBuffer;
-import :VkDevice;
+module Rendering:VulkanCommandBuffer;
+import :VulkanCore;
 import :Types;
 
 namespace Corvorium::Rendering::Vulkan {
+class VulkanCore;
+
 class VulkanCommandBuffer {
 public:
     VulkanCommandBuffer() = delete;
 
-    VulkanCommandBuffer(VulkanDevice* OwningDevice, vk::CommandBuffer Cb)
-        : Device{OwningDevice}
+    VulkanCommandBuffer(VulkanCore* InCore, vk::CommandBuffer Cb)
+        : Core{InCore}
         , CmdBuf{Cb}
     {}
 
@@ -34,7 +36,7 @@ public:
 
     void BindGraphicsPipeline(PipelineHandle Pipeline)
     {
-        vk::Pipeline PipelineToBind = Device->FindPipeline(Pipeline);
+        vk::Pipeline PipelineToBind = Core->FindPipeline(Pipeline);
         CRVM_LOG_RETURN_IF(PipelineToBind == nullptr, /*void*/;, VulkanLogger, kError, "Failed to bind pipeline: Pipeline not found.");
 
         CmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, PipelineToBind);
@@ -51,7 +53,7 @@ public:
     }
 
 private:
-    VulkanDevice* Device;
+    VulkanCore* Core;
     vk::CommandBuffer CmdBuf;
 };
 }

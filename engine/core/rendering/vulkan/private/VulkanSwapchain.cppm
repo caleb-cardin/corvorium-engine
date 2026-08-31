@@ -4,9 +4,9 @@ module;
 #include "common/Logging.hpp"
 #include "EASTL/vector.h"
 #include "vulkan/vulkan.hpp"
-module Rendering:VkSwapchainImpl;
-import :VkSwapchain;
-import :VkDevice;
+module Rendering:VulkanSwapchainImpl;
+import :VulkanSwapchain;
+import :VulkanCore;
 
 namespace Corvorium::Rendering::Vulkan {
 static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
@@ -29,11 +29,11 @@ static vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::Prese
 
 VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
 {
-    CRVM_ASSERT(Device);
+    CRVM_ASSERT(Core);
     CRVM_ASSERT(Params.Window);
     Surface = Util::CreateWindowSurface(Params.Instance, Window);
 
-    vk::PhysicalDevice physicalDevice = Device->GetPhysicalDevice();
+    vk::PhysicalDevice physicalDevice = Core->GetPhysicalDevice();
     vk::ResultValue result = physicalDevice.getSurfaceSupportKHR(Params.PresentQueue, Surface);
     if (!result.has_value())
     {
@@ -57,14 +57,14 @@ VulkanSwapchain::~VulkanSwapchain()
 bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
 {
     Window = Params.Window;
-    Device = Params.Device;
+    Core = Params.Core;
     QueueFamilyIndices = {Params.GraphicsQueue, Params.PresentQueue};
 
     OS::WindowCallbackData CallbackData{
         .ResizeFn = OnWindowResized,
         .ResizeUserPtr = this,
-        .CloseFn = VulkanDevice::OnWindowClosed,
-        .CloseUserPtr = Device
+        .CloseFn = VulkanCore::OnWindowClosed,
+        .CloseUserPtr = Core
     };
     Params.Window->SetCallbackData(CallbackData);
 
@@ -72,7 +72,7 @@ bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
     cmdPoolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
     cmdPoolInfo.queueFamilyIndex = QueueFamilyIndices.Queues.Graphics;
 
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     for (auto& cmdPool: FrameCommandPools)
     {
         vk::ResultValue result = vkDevice.createCommandPool(cmdPoolInfo);
@@ -102,7 +102,7 @@ void VulkanSwapchain::Teardown()
 {
     if (Initialized)
     {
-        vk::Device vkDevice = Device->GetDevice();
+        vk::Device vkDevice = Core->GetDevice();
 
         for (auto view: ImageViews)
         {
@@ -131,7 +131,7 @@ void VulkanSwapchain::Teardown()
             vkDevice.destroySemaphore(semaphore);
         }
 
-        if (vk::Instance vulkanInstance = Device->GetInstance(); Surface)
+        if (vk::Instance vulkanInstance = Core->GetInstance(); Surface)
         {
             vulkanInstance.destroySurfaceKHR(Surface);
         }
@@ -148,7 +148,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 {
     Initialized = false;
 
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     if (Swapchain)
     {
         Images.clear();
@@ -160,7 +160,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         ImageViews.clear();
     }
 
-    vk::PhysicalDevice vkPhysicalDevice = Device->GetPhysicalDevice();
+    vk::PhysicalDevice vkPhysicalDevice = Core->GetPhysicalDevice();
 
     vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo;
     surfaceInfo.surface = Surface;
@@ -222,7 +222,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     info.oldSwapchain = Swapchain;
 
     const vk::ResultValue scResult = vkDevice.createSwapchainKHR(info);
-    CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationError, VulkanLogger, kError, "Failed to create swapchain.");
+    CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationFailed, VulkanLogger, kError, "Failed to create swapchain.");
     Swapchain = scResult.value;
 
     u32 imageCount;
@@ -245,7 +245,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         if (auto viewResult = vkDevice.createImageView(viewInfo); viewResult.has_value())
         {
             CRVM_LOG_RETURN_IF(!viewResult.has_value(),
-                               RenderError::InitializationError,
+                               RenderError::InitializationFailed,
                                VulkanLogger,
                                kError,
                                "Failed to create swapchain image views.");
@@ -261,7 +261,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 
 bool VulkanSwapchain::CreateSyncPrimitives()
 {
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     vk::FenceCreateInfo fenceInfo{};
     fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
     for (auto& fence: InFlightFences)
@@ -299,7 +299,7 @@ void VulkanSwapchain::OnWindowResized(u32 Width, u32 Height, void* Swapchain)
 
 vk::Result VulkanSwapchain::WaitForFence() const
 {
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     vk::Result res = vkDevice.waitForFences(1, &InFlightFences[CurrentFrame], true, kMaxTimeout);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to wait for swapchain fences.");
     res = vkDevice.resetFences(1, &InFlightFences[CurrentFrame]);
@@ -309,7 +309,7 @@ vk::Result VulkanSwapchain::WaitForFence() const
 
 vk::Result VulkanSwapchain::AcquireImage()
 {
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     vk::ResultValue result = vkDevice.acquireNextImageKHR(Swapchain, kMaxTimeout, ImageAvailableSemaphores[CurrentFrame]);
     if (result.result == vk::Result::eSuboptimalKHR) bIsOutOfDate = true;
     CRVM_LOG_RETURN_IF(!result.has_value(),
@@ -323,7 +323,7 @@ vk::Result VulkanSwapchain::AcquireImage()
 
 vk::Result VulkanSwapchain::Reset()
 {
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     vk::Result res = vkDevice.resetCommandPool(FrameCommandPools[CurrentFrame]);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
     FrameCommandLists[CurrentFrame].CommandBuffers.clear();
@@ -414,7 +414,7 @@ vk::Result VulkanSwapchain::AllocateCommandBuffer(i32 Priority, vk::CommandBuffe
     info.commandPool = FrameCommandPools[CurrentFrame];
     info.commandBufferCount = 1;
 
-    vk::Device vkDevice = Device->GetDevice();
+    vk::Device vkDevice = Core->GetDevice();
     vk::CommandBuffer Cb;
     vk::Result res = vkDevice.allocateCommandBuffers(&info, &Cb);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to allocate command buffer.");
