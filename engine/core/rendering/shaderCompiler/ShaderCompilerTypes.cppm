@@ -13,6 +13,7 @@ export enum class ShaderCompilerError : u32 {
     InitializationError,
     ShaderCompileFailure,
     ShaderReflectionFailure,
+    InvalidShaderFile,
     InternalError
 };
 
@@ -47,6 +48,14 @@ export struct EnvironmentSettings {
 
 export const EnvironmentSettings kDefaultEnvironmentSettings{};
 
+export enum class ShaderPipelineType : u8 {
+    Unknown,
+    Rasterization,
+    Mesh,
+    Raytracing,
+    Compute
+};
+
 export struct ShaderReflection {
     ShaderReflection() = default;
     ShaderReflection(const ShaderReflection&) = delete;
@@ -63,6 +72,7 @@ export struct ShaderReflection {
         eastl::optional<eastl::vector<Rendering::VertexAttributeEntry>> VertexAttributes{};
     };
 
+    ShaderPipelineType Type{ShaderPipelineType::Unknown};
     eastl::vector<EntryPoint> EntryPoints{};
     eastl::vector<Rendering::ShaderBindingEntry> BindingEntries{};
     eastl::vector<Rendering::ShaderPushConstantEntry> PushConstants{};

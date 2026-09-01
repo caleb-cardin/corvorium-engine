@@ -3,11 +3,13 @@ module;
 #include "shader/shared/SemanticNames.h"
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
+#include "EASTL/array.h"
 
 #include "slang/slang.h"
 #include "slang/slang-com-ptr.h"
 
 #include "EASTL/optional.h"
+#include "EASTL/set.h"
 #include "EASTL/sort.h"
 #include "EASTL/string_hash_map.h"
 module ShaderCompiler:CompileContextImpl;
@@ -227,7 +229,14 @@ ResultValue<ShaderReflection> CompileContext::Reflect(Slang::ComPtr<slang::IComp
 
     u32 parameterCount = programLayout->getParameterCount();
 
-    ShaderReflection Reflect{}; {
+    ShaderReflection Reflect{};
+
+    Reflect.Type = ValidateShaderFileAsPipeline(programLayout);
+    CRVM_LOG_RETURN_IF(Reflect.Type == ShaderPipelineType::Unknown,
+                       ResultError(ShaderCompilerError::InvalidShaderFile),
+                       ShaderCompilerLogger,
+                       kError,
+                       "Shader file-as-pipeline validation failed!"); {
         eastl::string_hash_map<Rendering::ShaderBindingEntry*> bindingVariables;
         eastl::string_hash_map<Rendering::ShaderPushConstantEntry*> pushConstantVariables;
         for (u32 i = 0; i < parameterCount; ++i)
@@ -282,5 +291,128 @@ ResultValue<ShaderReflection> CompileContext::Reflect(Slang::ComPtr<slang::IComp
                 });
 
     return Reflect;
+}
+
+ShaderPipelineType CompileContext::ValidateShaderFileAsPipeline(slang::ProgramLayout* ProgramLayout)
+{
+    static constexpr ShaderStageFlags RasterExclusiveFlags{
+        ShaderStageFlagBits::Vertex |
+        ShaderStageFlagBits::Domain |
+        ShaderStageFlagBits::Hull |
+        ShaderStageFlagBits::Geometry
+    };
+    static constexpr ShaderStageFlags MeshExclusiveFlags{
+        ShaderStageFlagBits::Mesh |
+        ShaderStageFlagBits::Task
+    };
+    static constexpr ShaderStageFlags RaytracingExclusiveFlags{
+        ShaderStageFlagBits::RtGen |
+        ShaderStageFlagBits::RtIntersect |
+        ShaderStageFlagBits::RtAnyHit |
+        ShaderStageFlagBits::RtClosestHit |
+        ShaderStageFlagBits::RtMiss |
+        ShaderStageFlagBits::RtCall
+    };
+    static constexpr ShaderStageFlags ComputeExclusiveFlags{
+        ShaderStageFlagBits::Compute
+    };
+
+    // Note: ordering of the elements of the following arrays needs to remain respective to each other.
+
+    static constexpr eastl::array<const ShaderStageFlags*, 4> ExclusiveFlags{
+        &RasterExclusiveFlags,
+        &MeshExclusiveFlags,
+        &RaytracingExclusiveFlags,
+        &ComputeExclusiveFlags,
+    };
+    static constexpr eastl::array<ShaderPipelineType, 4> Types{
+        ShaderPipelineType::Rasterization,
+        ShaderPipelineType::Mesh,
+        ShaderPipelineType::Rasterization,
+        ShaderPipelineType::Compute
+    };
+
+    ShaderPipelineType predictedType{ShaderPipelineType::Unknown};
+    ShaderStageFlags stages{ShaderStageFlagBits::None};
+
+    SlangUInt entryPointCount = ProgramLayout->getEntryPointCount();
+    eastl::multiset<ShaderStageFlagBits> stageBitSet{};
+    for (SlangUInt i = 0; i < entryPointCount; ++i)
+    {
+        slang::EntryPointReflection* entryPoint = ProgramLayout->getEntryPointByIndex(i);
+        ShaderStageFlagBits thisStage = FromSlangType(entryPoint->getStage());
+        stageBitSet.insert(thisStage);
+        stages |= thisStage;
+    }
+
+    for (u8 i = 0; const auto* exclusiveFlags: ExclusiveFlags)
+    {
+        if (predictedType == ShaderPipelineType::Unknown)
+        {
+            if (stages & *exclusiveFlags)
+            {
+                predictedType = Types[i];
+            }
+        }
+        else if (stages & *exclusiveFlags)
+        {
+            return ShaderPipelineType::Unknown;
+        }
+        ++i;
+    }
+
+    if (predictedType == ShaderPipelineType::Unknown)
+    {
+        // The only way this will be reached is if the shader file ONLY contains a fragment shader,
+        // as this is the only flag not exclusively grouped. Still an invalid file.
+        return ShaderPipelineType::Unknown;
+    }
+    else if (predictedType == ShaderPipelineType::Rasterization)
+    {
+        // Checking required counts
+        if (stageBitSet.count(ShaderStageFlagBits::Vertex) != 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Fragment) != 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Geometry) > 1) //optional
+        {
+            return ShaderPipelineType::Unknown;
+        }
+        // If either domain or hull, count of both must be one
+        if (stages & ShaderStageFlagBits::Domain || stages & ShaderStageFlagBits::Hull)
+        {
+            if (stageBitSet.count(ShaderStageFlagBits::Domain) != 1 || //required
+                stageBitSet.count(ShaderStageFlagBits::Hull) != 1) //required
+            {
+                return ShaderPipelineType::Unknown;
+            }
+        }
+    }
+    else if (predictedType == ShaderPipelineType::Mesh)
+    {
+        if (stageBitSet.count(ShaderStageFlagBits::Mesh) != 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Fragment) != 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Task) > 1) //optional
+        {
+            return ShaderPipelineType::Unknown;
+        }
+    }
+    else if (predictedType == ShaderPipelineType::Raytracing)
+    {
+        // Note: This assumes the count of other RT shaders is correct, since simple count checking isn't a robust way to check for this.
+        if (stageBitSet.count(ShaderStageFlagBits::RtGen) < 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Fragment) != 0) //invalid
+        {
+            return ShaderPipelineType::Unknown;
+        }
+    }
+    else if (predictedType == ShaderPipelineType::Compute)
+    {
+        if (stageBitSet.count(ShaderStageFlagBits::Compute) != 1 || //required
+            stageBitSet.count(ShaderStageFlagBits::Fragment) != 0) //invalid
+        {
+            return ShaderPipelineType::Unknown;
+        }
+    }
+
+    return predictedType;
 }
 }

@@ -28,5 +28,6 @@ private:
     Slang::ComPtr<slang::ISession> Session{nullptr};
 
     [[nodiscard]] ResultValue<ShaderReflection> Reflect(Slang::ComPtr<slang::IComponentType>& LinkedProgram) const;
+    static [[nodiscard]] ShaderPipelineType ValidateShaderFileAsPipeline(slang::ProgramLayout* ProgramLayout);
 };
 }
