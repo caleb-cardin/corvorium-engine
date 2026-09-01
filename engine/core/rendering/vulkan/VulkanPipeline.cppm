@@ -1,20 +1,27 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 
+#include "common/Assert.hpp"
 #include "EASTL/variant.h"
 
 #include "vulkan/vulkan.hpp"
 module Rendering:VulkanPipeline;
-import :VulkanPipelineUtils;
 import :Types;
+import :VulkanPipelineUtils;
+import :VulkanShaderCache;
 import Common;
 
 namespace Corvorium::Rendering::Vulkan {
 struct PipelineCreateParamsBase {
-    eastl::vector<ShaderHandle> Shaders;
+    vk::Device InDevice{nullptr};
+    vk::PipelineCache PipelineCache{nullptr};
+    VulkanShaderCache* ShaderCache{nullptr};
 };
 
-struct GraphicsPipelineCreateParams {};
+struct VulkanGraphicsPipelineCreateParams : public PipelineCreateParamsBase {
+    Corvorium::Rendering::GraphicsPipelineCreateParams External{};
+
+};
 
 struct ComputePipelineCreateParams {};
 
@@ -29,7 +36,7 @@ enum class PipelineType : u8 {
 class VulkanPipeline {
 public:
     VulkanPipeline() = default;
-    VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const GraphicsPipelineCreateParams& Params);
+    VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const VulkanGraphicsPipelineCreateParams& Params);
     VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const ComputePipelineCreateParams& Params);
     VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const RaytracingPipelineCreateParams& Params);
 
@@ -53,13 +60,39 @@ private:
 
 VulkanPipeline::VulkanPipeline(vk::Device InDevice,
                                vk::PipelineCache Cache,
-                               const GraphicsPipelineCreateParams& Params)
+                               const VulkanGraphicsPipelineCreateParams& Params)
     : Type{PipelineType::Graphics}
     , Device{InDevice}
 {
-    vk::GraphicsPipelineCreateInfo info;
-    GraphicsPipelineDescBuilder builder;
+    CRVM_ASSERT(Params.External.Module != ShaderModuleHandle::kInvalidHandle);
 
+
+    const VulkanShader* shader = Params.ShaderCache->GetShader(Params.External.Module);
+    CRVM_ASSERT(shader);
+
+    eastl::vector<GraphicsPipelineDescBuilder::ShaderStageInfo> StageInfos;
+    StageInfos.reserve(shader->EntryPoints.size());
+
+    for (const auto& entryPoint: shader->EntryPoints)
+    {
+        StageInfos.emplace_back(GraphicsPipelineDescBuilder::ShaderStageInfo{
+            Util::ToVulkanType(entryPoint.Stage), entryPoint.Name.c_str()
+        });
+    }
+
+    vk::PipelineRenderingCreateInfo renderInfo;
+    renderInfo.
+
+    auto builder = GraphicsPipelineDescBuilder()
+            .SetRenderingCreateInfo(renderingInfo)
+            .AddMultiShader(shader->Module, StageInfos)
+            .SetLayout(shader->Layout)
+            .SetColorBlends(Params.External.ColorBlend, attachmentCount/*TODO*/)
+            .SetPrimitiveType(Params.External.Primitive)
+            .SetDepthTestType(Params.External.DepthTest)
+            .SetBackfaceCullEnabled(Params.External.BackfaceCullEnabled);
+
+    vk::GraphicsPipelineCreateInfo info = builder.MakeGraphicsPipelineCreateInfo();
 
     auto result = Device.createGraphicsPipeline(Cache, info);
 }

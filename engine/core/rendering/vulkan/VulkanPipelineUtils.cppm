@@ -12,6 +12,7 @@ module;
 module Rendering:VulkanPipelineUtils;
 import Common;
 import :VulkanUtils;
+import :Types;
 
 namespace Corvorium::Rendering::Vulkan {
 namespace {
@@ -99,171 +100,167 @@ constexpr vk::PipelineDynamicStateCreateInfo kDefaultDynamicState{
 
 class GraphicsPipelineDescBuilder {
 public:
-    enum class PrimitiveType {
-        Default,
-        PointList = Default,
-        TriangleList
-    };
-
-    enum class DepthTestType {
-        Default,
-        Disabled = Default,
-        Opaque,
-        Transparent
-    };
-
-    enum class ColorBlendType {
-        None,
-        Alpha,
-        Additive
-    };
-
     struct ShaderStageInfo {
         vk::ShaderStageFlagBits Stage{};
         const char* EntryPoint{};
     };
 
-    [[nodiscard]] bool IsComplete() const
-    {
-        if (!RenderingCreateInfo ||
-            ShaderStages.empty() ||
-            ColorBlends.empty() ||
-            !Layout)
-            return false;
-
-        return true;
-    }
-
+    [[nodiscard]] bool IsComplete() const;
     [[nodiscard]] const vk::PipelineRenderingCreateInfo* GetRenderingCreateInfo() const { return RenderingCreateInfo; }
-
-    GraphicsPipelineDescBuilder& SetRenderingCreateInfo(vk::PipelineRenderingCreateInfo* Info)
-    {
-        RenderingCreateInfo = Info;
-        return *this;
-    }
+    GraphicsPipelineDescBuilder& SetRenderingCreateInfo(vk::PipelineRenderingCreateInfo* Info);
 
     [[nodiscard]] const eastl::vector<vk::PipelineShaderStageCreateInfo>& GetShaderStages() const { return ShaderStages; }
-
-    GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, vk::ShaderStageFlagBits Stage, const char* EntryPoint)
-    {
-        auto& NewStage = ShaderStages.emplace_back();
-        NewStage.stage = Stage;
-        NewStage.module = Shader;
-        NewStage.pName = EntryPoint;
-        return *this;
-    }
-
-    GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, const ShaderStageInfo& StageInfo)
-    {
-        return AddSingleShader(Shader, StageInfo.Stage, StageInfo.EntryPoint);
-    }
-
-    GraphicsPipelineDescBuilder& AddMultiShader(vk::ShaderModule Shader, eastl::span<ShaderStageInfo> StageInfos)
-    {
-        for (const auto& info: StageInfos)
-        {
-            AddSingleShader(Shader, info.Stage, info.EntryPoint);
-        }
-        return *this;
-    }
+    GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, vk::ShaderStageFlagBits Stage, const char* EntryPoint);
+    GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, const ShaderStageInfo& StageInfo);
+    GraphicsPipelineDescBuilder& AddMultiShader(vk::ShaderModule Shader, eastl::span<ShaderStageInfo> StageInfos);
 
     [[nodiscard]] vk::PipelineLayout GetLayout() const { return Layout; }
-
-    GraphicsPipelineDescBuilder& SetLayout(vk::PipelineLayout InLayout)
-    {
-        Layout = InLayout;
-        return *this;
-    }
+    GraphicsPipelineDescBuilder& SetLayout(vk::PipelineLayout InLayout);
 
     [[nodiscard]] const eastl::vector<ColorBlendType>& GetColorBlends() const { return ColorBlends; }
+    GraphicsPipelineDescBuilder& SetColorBlends(ColorBlendType ColorBlend, u32 Count);
 
-    GraphicsPipelineDescBuilder& SetColorBlends(std::initializer_list<ColorBlendType>& initList)
-    {
-        std::construct_at(&ColorBlends, initList);
-        return *this;
-    }
+    GraphicsPipelineDescBuilder& SetPrimitiveType(PrimitiveType InType) { Primitive = InType; }
+    GraphicsPipelineDescBuilder& SetDepthTestType(DepthTestType InType) { DepthTest = InType; }
+    GraphicsPipelineDescBuilder& SetBackfaceCullEnabled(bool Enabled) { BackfaceCullEnabled = Enabled; }
 
-    PrimitiveType Primitive{PrimitiveType::Default};
-    DepthTestType DepthTest{DepthTestType::Default};
-    bool BackfaceCullEnabled{false};
+    [[nodiscard]] ResultValue<vk::GraphicsPipelineCreateInfo> MakeGraphicsPipelineCreateInfo() const;
 
 private:
     vk::PipelineRenderingCreateInfo* RenderingCreateInfo{nullptr};
     eastl::vector<vk::PipelineShaderStageCreateInfo> ShaderStages{};
-    eastl::vector<ColorBlendType> ColorBlends{};
     vk::PipelineLayout Layout{nullptr};
+    eastl::vector<ColorBlendType> ColorBlends{};
+    PrimitiveType Primitive{PrimitiveType::Default};
+    DepthTestType DepthTest{DepthTestType::Default};
+    bool BackfaceCullEnabled{false};
 };
 
-bool MakeGraphicsPipelineCreateInfo(vk::GraphicsPipelineCreateInfo& Info, const GraphicsPipelineDescBuilder& Desc)
+bool GraphicsPipelineDescBuilder::IsComplete() const
 {
-    CRVM_LOG_RETURN_IF(!Desc.IsComplete(),
-                       false,
+    if (!RenderingCreateInfo ||
+        ShaderStages.empty() ||
+        !Layout)
+        return false;
+
+    return true;
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetRenderingCreateInfo(vk::PipelineRenderingCreateInfo* Info)
+{
+    RenderingCreateInfo = Info;
+    return *this;
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::AddSingleShader(vk::ShaderModule Shader,
+                                                                          vk::ShaderStageFlagBits Stage,
+                                                                          const char* EntryPoint)
+{
+    auto& NewStage = ShaderStages.emplace_back();
+    NewStage.stage = Stage;
+    NewStage.module = Shader;
+    NewStage.pName = EntryPoint;
+    return *this;
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::AddSingleShader(vk::ShaderModule Shader, const ShaderStageInfo& StageInfo)
+{
+    return AddSingleShader(Shader, StageInfo.Stage, StageInfo.EntryPoint);
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::AddMultiShader(vk::ShaderModule Shader, eastl::span<ShaderStageInfo> StageInfos)
+{
+    for (const auto& info: StageInfos)
+    {
+        AddSingleShader(Shader, info.Stage, info.EntryPoint);
+    }
+    return *this;
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetLayout(vk::PipelineLayout InLayout)
+{
+    Layout = InLayout;
+    return *this;
+}
+
+GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetColorBlends(ColorBlendType ColorBlend, u32 Count)
+{
+    ColorBlends.assign(Count, ColorBlend);
+    return *this;
+}
+
+ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::MakeGraphicsPipelineCreateInfo() const
+{
+    CRVM_LOG_RETURN_IF(!IsComplete(),
+                       ResultError(RenderError::InitializationFailed),
                        VulkanLogger,
                        kError,
                        "Failed to make create info: Graphics pipeline description was incomplete.");
 
-    Info.pNext = Desc.GetRenderingCreateInfo();
+    vk::GraphicsPipelineCreateInfo info;
 
-    const auto& ShaderStages = Desc.GetShaderStages();
-    Info.stageCount = static_cast<u32>(ShaderStages.size());
-    Info.pStages = ShaderStages.data();
+    info.pNext = GetRenderingCreateInfo();
 
-    switch (Desc.Primitive)
-    {
-    case GraphicsPipelineDescBuilder::PrimitiveType::PointList:
-    {
-        Info.pInputAssemblyState = &kDefaultIAState;
-        break;
-    }
-    case GraphicsPipelineDescBuilder::PrimitiveType::TriangleList:
-        Info.pInputAssemblyState = &kTriangleListIAState;
-        break;
-    }
+    const auto& ShaderStages = GetShaderStages();
+    info.stageCount = static_cast<u32>(ShaderStages.size());
+    info.pStages = ShaderStages.data();
 
-    switch (Desc.DepthTest)
+    switch (Primitive)
     {
-    case GraphicsPipelineDescBuilder::DepthTestType::Disabled:
+    case PrimitiveType::PointList:
     {
-        Info.pDepthStencilState = &kDefaultDepthStencilState;
+        info.pInputAssemblyState = &kDefaultIAState;
         break;
     }
-    case GraphicsPipelineDescBuilder::DepthTestType::Opaque:
-    {
-        Info.pDepthStencilState = &kOpaqueDepthStencilState;
+    case PrimitiveType::TriangleList:
+        info.pInputAssemblyState = &kTriangleListIAState;
         break;
-    }
-    case GraphicsPipelineDescBuilder::DepthTestType::Transparent:
-    {
-        Info.pDepthStencilState = &kTransparentDepthStencilState;
-        break;
-    }
     }
 
-    Info.pTessellationState = &kDefaultTessellationState;
-    Info.pViewportState = &kDefaultVPState;
-    Info.pRasterizationState = Desc.BackfaceCullEnabled ? &kBackFaceCullRasterState : &kDefaultRasterState;
-    Info.pMultisampleState = &kDefaultMSAAState;
-    Info.pDynamicState = &kDefaultDynamicState;
+    switch (DepthTest)
+    {
+    case DepthTestType::Disabled:
+    {
+        info.pDepthStencilState = &kDefaultDepthStencilState;
+        break;
+    }
+    case DepthTestType::Opaque:
+    {
+        info.pDepthStencilState = &kOpaqueDepthStencilState;
+        break;
+    }
+    case DepthTestType::Transparent:
+    {
+        info.pDepthStencilState = &kTransparentDepthStencilState;
+        break;
+    }
+    }
+
+    info.pTessellationState = &kDefaultTessellationState;
+    info.pViewportState = &kDefaultVPState;
+    info.pRasterizationState = BackfaceCullEnabled ? &kBackFaceCullRasterState : &kDefaultRasterState;
+    info.pMultisampleState = &kDefaultMSAAState;
+    info.pDynamicState = &kDefaultDynamicState;
     vk::PipelineColorBlendStateCreateInfo BlendState;
     BlendState.blendConstants.fill(1.f);
     eastl::vector<vk::PipelineColorBlendAttachmentState> blendAttachments;
-    const auto& colorBlends = Desc.GetColorBlends();
+    const auto& colorBlends = GetColorBlends();
     blendAttachments.resize(colorBlends.size());
     for (u32 i = 0; const auto& Blend: colorBlends)
     {
         switch (Blend)
         {
-        case GraphicsPipelineDescBuilder::ColorBlendType::None:
+        case ColorBlendType::None:
         {
             blendAttachments[i] = kDefaultColorBlendAttachment;
             break;
         }
-        case GraphicsPipelineDescBuilder::ColorBlendType::Alpha:
+        case ColorBlendType::Alpha:
         {
             blendAttachments[i] = kAlphaColorBlendAttachment;
             break;
         }
-        case GraphicsPipelineDescBuilder::ColorBlendType::Additive:
+        case ColorBlendType::Additive:
         {
             blendAttachments[i] = kAdditiveColorBlendAttachment;
             break;
@@ -272,7 +269,7 @@ bool MakeGraphicsPipelineCreateInfo(vk::GraphicsPipelineCreateInfo& Info, const 
         ++i;
     }
 
-    Info.layout = Desc.GetLayout();
-    return true;
+    info.layout = GetLayout();
+    return info;
 }
 }

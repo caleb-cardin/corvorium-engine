@@ -3,10 +3,11 @@ module;
 
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
-#include "EASTL/sort.h"
-#include "EASTL/span.h"
 
 #include "EASTL/string_hash_map.h"
+#include "EASTL/optional.h"
+#include "EASTL/sort.h"
+#include "EASTL/span.h"
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
 
@@ -24,11 +25,18 @@ import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
 struct VulkanShader {
-    ShaderHandle Handle;
+    struct EntryPoint {
+        eastl::string Name;
+        ShaderStageFlagBits Stage;
+    };
+
+    ShaderModuleHandle Handle;
+    eastl::vector<EntryPoint> EntryPoints{};
+    eastl::optional<eastl::vector<Rendering::VertexAttributeEntry>> VertexAttributes{};
     vk::ShaderModule Module{nullptr};
     vk::PipelineLayout Layout{nullptr};
-    eastl::vector<vk::DescriptorSetLayout> DescriptorLayouts;
-    eastl::vector<vk::PushConstantRange> PushConstantRanges;
+    eastl::vector<vk::DescriptorSetLayout> DescriptorLayouts{};
+    eastl::vector<vk::PushConstantRange> PushConstantRanges{};
 };
 
 class VulkanShaderCache {
@@ -46,17 +54,17 @@ public:
 
     [[nodiscard]] ShaderCompiler::CompileContext* GetDefaultCompileContext() const { return DefaultCompileContext.get(); }
 
-    ResultValue<const VulkanShader*>
-    GetOrCreateShader(const eastl::string& ShaderPath, const ShaderCompiler::CompileContext* Context = nullptr);
-    const VulkanShader* GetShader(ShaderHandle Shader);
+    ResultValue<const VulkanShader*> GetOrCreateShader(const eastl::string& ShaderPath,
+                                                       const ShaderCompiler::CompileContext* Context = nullptr);
+    const VulkanShader* GetShader(ShaderModuleHandle Shader);
 
 private:
     vk::Device Device{nullptr};
     FileSystem::IFileProvider* FileProvider{nullptr};
     eastl::unique_ptr<ShaderCompiler::CompileContext> DefaultCompileContext{nullptr};
 
-    eastl::string_hash_map<ShaderHandle> FileToHandleMap{};
-    eastl::hash_map<ShaderHandle, VulkanShader, HandleHash> HandleToShaderMap{};
+    eastl::string_hash_map<ShaderModuleHandle> FileToHandleMap{};
+    eastl::hash_map<ShaderModuleHandle, VulkanShader, HandleHash> HandleToShaderMap{};
 
     void CreateDescriptorData(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
                               eastl::vector<vk::DescriptorSetLayout>& OutLayouts);
@@ -96,7 +104,7 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
 {
     if (FileToHandleMap.contains(ShaderPath.c_str()))
     {
-        ShaderHandle handle = FileToHandleMap[ShaderPath.c_str()];
+        ShaderModuleHandle handle = FileToHandleMap[ShaderPath.c_str()];
         CRVM_ASSERT(HandleToShaderMap.contains(handle));
         return &HandleToShaderMap[handle];
     }
@@ -130,8 +138,21 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
                        "Failed to create shader module.");
 
     VulkanShader shader{};
-    shader.Handle = ShaderHandle::New();
+    shader.Handle = ShaderModuleHandle::New();
     shader.Module = moduleResult.value;
+
+    for (const auto& entry: program.GetReflection().EntryPoints)
+    {
+        shader.EntryPoints.emplace_back(VulkanShader::EntryPoint{
+            .Name = entry.Name,
+            .Stage = entry.Stage
+        });
+        if (entry.VertexAttributes.has_value())
+        {
+            const auto& vertexAttributes = entry.VertexAttributes.value();
+            shader.VertexAttributes.emplace(vertexAttributes);
+        }
+    }
 
     CreateDescriptorData(program.GetReflection().BindingEntries, shader.DescriptorLayouts);
 
@@ -160,7 +181,7 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
     return &HandleToShaderMap[it->first];
 }
 
-const VulkanShader* VulkanShaderCache::GetShader(ShaderHandle Shader)
+const VulkanShader* VulkanShaderCache::GetShader(ShaderModuleHandle Shader)
 {
     if (HandleToShaderMap.contains(Shader))
     {

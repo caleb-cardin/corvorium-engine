@@ -4,6 +4,7 @@ module;
 #include "EASTL/hash_map.h"
 #include "EASTL/string.h"
 #include "vulkan/vulkan.hpp"
+#include "vma/vk_mem_alloc.h"
 export module Rendering:VulkanCore;
 import :RenderCore;
 import :VulkanSwapchain;
@@ -33,12 +34,15 @@ public:
     [[nodiscard]] ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority) override;
     [[nodiscard]] RenderError EndFrame(OS::WindowHandle Window) override;
 
-    [[nodiscard]] ResultValue<ShaderHandle> CreateShaderModule(const eastl::string& Name) override;
-    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(ShaderHandle Shader) override;
+    [[nodiscard]] ResultValue<ShaderModuleHandle> CreateShaderModule(const eastl::string& Name) override;
+    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(ShaderModuleHandle Shader) override;
 
     [[nodiscard]] vk::Instance GetInstance() const { return Instance; }
     [[nodiscard]] vk::PhysicalDevice GetPhysicalDevice() const { return PhysicalDevice; }
     [[nodiscard]] vk::Device GetDevice() const { return Device; }
+    [[nodiscard]] VmaAllocator GetAllocator() const { return Allocator; }
+
+    [[nodiscard]] Util::SurfaceInfo GetSurfaceInfo() const { return SurfaceInfo; };
 
     static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
 
@@ -53,12 +57,15 @@ private:
     vk::PhysicalDevice PhysicalDevice{nullptr};
     vk::Device Device{nullptr};
 
+    VmaAllocator Allocator{nullptr};
+
     vk::PipelineCache PipelineCache{nullptr};
 
     QueueData GraphicsQueue{};
     QueueData TransferQueue{};
     u32 PresentQueueFamily{};
 
+    Util::SurfaceInfo SurfaceInfo{};
     eastl::hash_map<OS::WindowHandle, VulkanSwapchain, HandleHash> Swapchains{};
 
     eastl::unique_ptr<VulkanShaderCache> ShaderCache{};
@@ -67,7 +74,9 @@ private:
 
     [[nodiscard]] bool InitInstance();
     [[nodiscard]] bool SelectPhysicalDevice();
+    [[nodiscard]] bool SelectSurfaceFormats(vk::SurfaceKHR Surface);
     [[nodiscard]] bool InitDevice();
+    [[nodiscard]] bool InitAllocator(const eastl::vector<const char*>& EnabledExtensionNames);
     [[nodiscard]] bool InitPipelineCache();
 
     void Teardown();

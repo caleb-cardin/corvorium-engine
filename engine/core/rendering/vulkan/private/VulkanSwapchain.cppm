@@ -9,24 +9,6 @@ import :VulkanSwapchain;
 import :VulkanCore;
 
 namespace Corvorium::Rendering::Vulkan {
-static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
-{
-    for (const auto& format: Formats)
-    {
-        if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
-        {
-            return format;
-        }
-    }
-    return Formats[0];
-}
-
-static vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
-{
-    for (const auto& mode: Modes) { if (mode == vk::PresentModeKHR::eMailbox) return mode; }
-    return vk::PresentModeKHR::eFifo;
-}
-
 VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
 {
     CRVM_ASSERT(Core);
@@ -160,31 +142,13 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         ImageViews.clear();
     }
 
-    vk::PhysicalDevice vkPhysicalDevice = Core->GetPhysicalDevice();
+    Util::SurfaceInfo surfaceInfo = Core->GetSurfaceInfo();
 
-    vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo;
-    surfaceInfo.surface = Surface;
+    vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo2;
+    surfaceInfo2.surface = Surface;
     vk::SurfaceCapabilities2KHR surfaceCaps;
-    vk::Result res = vkPhysicalDevice.getSurfaceCapabilities2KHR(&surfaceInfo, &surfaceCaps, VulkanDispatcher);
+    vk::Result res = Core->GetPhysicalDevice().getSurfaceCapabilities2KHR(&surfaceInfo2, &surfaceCaps, VulkanDispatcher);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface capabilities.");
-
-    u32 formatCount = 0;
-    res = vkPhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, nullptr, VulkanDispatcher);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface formats.");
-    eastl::vector<vk::SurfaceFormat2KHR> surfaceFormats{formatCount, vk::SurfaceFormat2KHR{}};
-    res = vkPhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data(), VulkanDispatcher);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface formats.");
-
-    const vk::SurfaceFormat2KHR selectedFormat = SelectOptimalFormat(surfaceFormats);
-
-    u32 presentModeCount = 0;
-    res = vkPhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, nullptr, VulkanDispatcher);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface present modes.");
-    eastl::vector<vk::PresentModeKHR> surfacePresentModes{presentModeCount, vk::PresentModeKHR{}};
-    res = vkPhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data(), VulkanDispatcher);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface present modes.");
-
-    const vk::PresentModeKHR selectedPresentMode = SelectOptimalPresentMode(surfacePresentModes);
 
     vk::Extent2D extent = surfaceCaps.surfaceCapabilities.currentExtent;
     if (surfaceCaps.surfaceCapabilities.currentExtent.width == UINT32_MAX ||
@@ -207,8 +171,8 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     vk::SwapchainCreateInfoKHR info;
     info.surface = Surface;
     info.minImageCount = std::min(surfaceCaps.surfaceCapabilities.minImageCount + 1, surfaceCaps.surfaceCapabilities.maxImageCount);
-    info.imageFormat = selectedFormat.surfaceFormat.format;
-    info.imageColorSpace = selectedFormat.surfaceFormat.colorSpace;
+    info.imageFormat = surfaceInfo.ColorFormat.format;
+    info.imageColorSpace = surfaceInfo.ColorFormat.colorSpace;
     info.imageExtent = surfaceCaps.surfaceCapabilities.currentExtent;
     info.imageArrayLayers = 1;
     info.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
@@ -217,7 +181,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     info.pQueueFamilyIndices = QueueFamilyIndices.QueueFamilies;
     info.preTransform = surfaceCaps.surfaceCapabilities.currentTransform;
     info.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-    info.presentMode = selectedPresentMode;
+    info.presentMode = surfaceInfo.PresentMode;
     info.clipped = true;
     info.oldSwapchain = Swapchain;
 
@@ -238,7 +202,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         vk::ImageViewCreateInfo viewInfo;
         viewInfo.image = image;
         viewInfo.viewType = vk::ImageViewType::e2D;
-        viewInfo.format = selectedFormat.surfaceFormat.format;
+        viewInfo.format = surfaceInfo.ColorFormat.format;
         viewInfo.components = vk::ComponentMapping{};
         viewInfo.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 

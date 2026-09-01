@@ -4,6 +4,7 @@ module;
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
 
+#include "EASTL/vector.h"
 #include "vulkan/vulkan.hpp"
 #include "GLFW/glfw3.h"
 module Rendering:VulkanUtils;
@@ -50,12 +51,36 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
     return VK_FALSE;
 }
 
+struct SurfaceInfo {
+    vk::SurfaceFormatKHR ColorFormat;
+    vk::Format DepthStencilFormat;
+    vk::PresentModeKHR PresentMode;
+};
+
 vk::SurfaceKHR CreateWindowSurface(const vk::Instance Instance, const OS::Window* Window)
 {
     VkSurfaceKHR surface;
     VkResult res = glfwCreateWindowSurface(Instance, static_cast<GLFWwindow*>(Window->GetWindowRaw()), nullptr, &surface);
     CRVM_LOG_RETURN_IF(res != VK_SUCCESS, nullptr, VulkanLogger, kError, "Failed to create surface.");
     return surface;
+}
+
+vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
+{
+    for (const auto& format: Formats)
+    {
+        if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
+        {
+            return format;
+        }
+    }
+    return Formats[0];
+}
+
+vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
+{
+    for (const auto& mode: Modes) { if (mode == vk::PresentModeKHR::eMailbox) return mode; }
+    return vk::PresentModeKHR::eFifo;
 }
 
 vk::ShaderStageFlags ToVulkanType(ShaderStageFlags StageFlags)
@@ -76,6 +101,26 @@ vk::ShaderStageFlags ToVulkanType(ShaderStageFlags StageFlags)
     if (StageFlags & ShaderStageFlagBits::RtCall) OutFlags |= vk::ShaderStageFlagBits::eCallableKHR;
     if (StageFlags & ShaderStageFlagBits::Compute) OutFlags |= vk::ShaderStageFlagBits::eCompute;
     return OutFlags;
+}
+
+vk::ShaderStageFlagBits ToVulkanType(ShaderStageFlagBits StageFlagBit)
+{
+    if (StageFlagBit & ShaderStageFlagBits::Vertex) return vk::ShaderStageFlagBits::eVertex;
+    if (StageFlagBit & ShaderStageFlagBits::Hull) return vk::ShaderStageFlagBits::eTessellationControl;
+    if (StageFlagBit & ShaderStageFlagBits::Domain) return vk::ShaderStageFlagBits::eTessellationEvaluation;
+    if (StageFlagBit & ShaderStageFlagBits::Geometry) return vk::ShaderStageFlagBits::eGeometry;
+    if (StageFlagBit & ShaderStageFlagBits::Fragment) return vk::ShaderStageFlagBits::eFragment;
+    if (StageFlagBit & ShaderStageFlagBits::Mesh) return vk::ShaderStageFlagBits::eMeshEXT;
+    if (StageFlagBit & ShaderStageFlagBits::Task) return vk::ShaderStageFlagBits::eTaskEXT;
+    if (StageFlagBit & ShaderStageFlagBits::RtGen) return vk::ShaderStageFlagBits::eRaygenKHR;
+    if (StageFlagBit & ShaderStageFlagBits::RtIntersect) return vk::ShaderStageFlagBits::eIntersectionKHR;
+    if (StageFlagBit & ShaderStageFlagBits::RtAnyHit) return vk::ShaderStageFlagBits::eAnyHitKHR;
+    if (StageFlagBit & ShaderStageFlagBits::RtClosestHit) return vk::ShaderStageFlagBits::eClosestHitKHR;
+    if (StageFlagBit & ShaderStageFlagBits::RtMiss) return vk::ShaderStageFlagBits::eMissKHR;
+    if (StageFlagBit & ShaderStageFlagBits::RtCall) return vk::ShaderStageFlagBits::eCallableKHR;
+    if (StageFlagBit & ShaderStageFlagBits::Compute) return vk::ShaderStageFlagBits::eCompute;
+    CRVM_ASSERT_MSG(false, "Unhandled ShaderStageFlagBit");
+    return vk::ShaderStageFlagBits::eVertex;
 }
 
 vk::DescriptorType ToVulkanType(ShaderResourceType Type)

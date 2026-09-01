@@ -30,7 +30,6 @@ using ResultValue = Error::ResultValueType<V, RenderError>;
 
 using ResultError = Error::ResultErrorType<RenderError>;
 
-export class PipelineCreateParams {};
 
 export namespace Internal {
 struct Shader {};
@@ -44,15 +43,36 @@ struct Mesh {};
 struct Pipeline {};
 }
 
-export using ShaderHandle = HandleType<Internal::Shader>;
+export using ShaderModuleHandle = HandleType<Internal::Shader>;
 export using BufferHandle = HandleType<Internal::Buffer>;
 export using ImageHandle = HandleType<Internal::Image>;
 export using MeshHandle = HandleType<Internal::Mesh>;
 export using PipelineHandle = HandleType<Internal::Pipeline>;
 
-export struct ShaderStageRef {
-    ShaderHandle Handle;
-    const eastl::string& EntryPointName;
-    ShaderStageFlagBits Stage;
+export enum class PrimitiveType : u8 {
+    Default,
+    PointList,
+    TriangleList = Default
+};
+
+export enum class DepthTestType : u8 {
+    Default,
+    Disabled = Default,
+    Opaque,
+    Transparent
+};
+
+export enum class ColorBlendType : u8 {
+    None,
+    Alpha,
+    Additive
+};
+
+export struct GraphicsPipelineCreateParams {
+    ShaderModuleHandle Module;
+    PrimitiveType Primitive;
+    DepthTestType DepthTest;
+    ColorBlendType ColorBlend;
+    bool BackfaceCullEnabled;
 };
 }

@@ -30,7 +30,7 @@ public:
     [[nodiscard]] virtual ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority) = 0;
     [[nodiscard]] virtual RenderError EndFrame(OS::WindowHandle Window) = 0;
 
-    [[nodiscard]] virtual ResultValue<ShaderHandle> CreateShaderModule(const eastl::string& Name) = 0;
-    [[nodiscard]] virtual ResultValue<PipelineHandle> CreatePipeline(ShaderHandle Shader) = 0;
+    [[nodiscard]] virtual ResultValue<ShaderModuleHandle> CreateShaderModule(const eastl::string& Name) = 0;
+    [[nodiscard]] virtual ResultValue<PipelineHandle> CreatePipeline(ShaderModuleHandle Shader) = 0;
 };
 }

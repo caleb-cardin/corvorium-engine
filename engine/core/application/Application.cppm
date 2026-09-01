@@ -65,7 +65,7 @@ Application::Application(eastl::string&& AppName)
                                   / std::filesystem::path("shaders")).string().c_str();
     FileSystem->Mount(physicalPath, "shaders");
 
-    Rendering::ResultValue<Rendering::ShaderHandle> shaderRes = Rendering->CreateShaderModule("shaders://Test.slang");
+    Rendering::ResultValue<Rendering::ShaderModuleHandle> shaderRes = Rendering->CreateShaderModule("shaders://Test.slang");
     if (!shaderRes.has_value())
     {
         CRVM_LOG(AppLogger, kInfo, "Shader creation failed");

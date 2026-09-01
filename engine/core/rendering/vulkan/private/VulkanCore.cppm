@@ -9,6 +9,7 @@ module;
 #include "EASTL/variant.h"
 
 #include "vulkan/vulkan.hpp"
+#include "vma/vk_mem_alloc.h"
 module Rendering:VulkanCoreImpl;
 import :VulkanCore;
 import :CommandBufferImpl;
@@ -187,7 +188,7 @@ RenderError VulkanCore::EndFrame(OS::WindowHandle Window)
     return RenderError::Success;
 }
 
-ResultValue<ShaderHandle> VulkanCore::CreateShaderModule(const eastl::string& Name)
+ResultValue<ShaderModuleHandle> VulkanCore::CreateShaderModule(const eastl::string& Name)
 {
     auto result = ShaderCache->GetOrCreateShader(Name);
     if (result.has_value())
@@ -197,7 +198,7 @@ ResultValue<ShaderHandle> VulkanCore::CreateShaderModule(const eastl::string& Na
     return ResultError(RenderError::InternalError);
 }
 
-ResultValue<PipelineHandle> VulkanCore::CreatePipeline(ShaderHandle Shader)
+ResultValue<PipelineHandle> VulkanCore::CreatePipeline(ShaderModuleHandle Shader)
 {
     return ResultError(RenderError::InternalError);
 }
@@ -232,7 +233,7 @@ bool VulkanCore::InitInstance()
     VulkanDispatcher.init(vkGetInstanceProcAddr);
 
     vk::ApplicationInfo appInfo;
-    appInfo.apiVersion = vk::makeApiVersion(0, 1, 4, 0);
+    appInfo.apiVersion = vk::ApiVersion14;
     appInfo.pApplicationName = ""; // TODO
     appInfo.applicationVersion = vk::makeApiVersion(0, CORVORIUM_VERSION_MAJOR, CORVORIUM_VERSION_MINOR, CORVORIUM_VERSION_PATCH);
     appInfo.pEngineName = "Corvorium Engine";
@@ -347,6 +348,54 @@ bool VulkanCore::SelectPhysicalDevice()
     return true;
 }
 
+bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
+{
+    CRVM_ASSERT(Surface);
+    CRVM_ASSERT(PhysicalDevice);
+
+    vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo;
+    surfaceInfo.surface = Surface;
+    vk::SurfaceCapabilities2KHR surfaceCaps;
+    vk::Result res = PhysicalDevice.getSurfaceCapabilities2KHR(&surfaceInfo, &surfaceCaps, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface capabilities.");
+
+    u32 formatCount = 0;
+    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, nullptr, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface formats.");
+    eastl::vector<vk::SurfaceFormat2KHR> surfaceFormats{formatCount, vk::SurfaceFormat2KHR{}};
+    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data(), VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface formats.");
+
+    const vk::SurfaceFormat2KHR selectedFormat = Util::SelectOptimalFormat(surfaceFormats);
+    SurfaceInfo.ColorFormat = selectedFormat.surfaceFormat;
+
+    u32 presentModeCount = 0;
+    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, nullptr, VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface present modes.");
+    eastl::vector<vk::PresentModeKHR> surfacePresentModes{presentModeCount, vk::PresentModeKHR{}};
+    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data(), VulkanDispatcher);
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface present modes.");
+
+    SurfaceInfo.PresentMode = Util::SelectOptimalPresentMode(surfacePresentModes);
+
+    static constexpr eastl::array<vk::Format, 3> kDepthFormats{
+        vk::Format::eD32SfloatS8Uint,
+        vk::Format::eD24UnormS8Uint
+    };
+    bool depthStencilFound = false;
+    for (const auto depthFormat: kDepthFormats)
+    {
+        vk::FormatProperties props = PhysicalDevice.getFormatProperties(depthFormat);
+        if (props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
+        {
+            SurfaceInfo.DepthStencilFormat = depthFormat;
+            depthStencilFound = true;
+            break;
+        }
+    }
+    CRVM_ASSERT_MSG(depthStencilFound, "Depth/Stencil formats unsupported!");
+}
+
 bool VulkanCore::InitDevice()
 {
     eastl::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
@@ -361,10 +410,10 @@ bool VulkanCore::InitDevice()
 
     // Extensions
 
-    constexpr eastl::array<const char*, 1> reqDeviceExtNames = {
+    constexpr eastl::array<const char*, 1> reqDeviceExtNames{
         "VK_KHR_swapchain"
     };
-    constexpr const eastl::array<const char*, 9> optDeviceExtNames = {
+    constexpr const eastl::array<const char*, 10> optDeviceExtNames{
         "VK_EXT_memory_budget",
         "VK_EXT_memory_priority",
         "VK_AMD_device_coherent_memory",
@@ -374,6 +423,7 @@ bool VulkanCore::InitDevice()
         "VK_KHR_acceleration_structure",
         "VK_KHR_ray_tracing_pipeline",
         "VK_EXT_mesh_shader"
+        "VK_KHR_external_memory_win32"
     };
 
     u32 propertyCount = 0;
@@ -468,6 +518,54 @@ bool VulkanCore::InitDevice()
 
     VulkanDispatcher.init(Device);
 
+    // Allocator - init here for access to enabled extensions
+    return InitAllocator(extensions);
+}
+
+bool VulkanCore::InitAllocator(const eastl::vector<const char*>& EnabledExtensionNames)
+{
+    u32 allocatorFlags{};
+
+    eastl::string_hash_map<u32> extensionMap{};
+    for (const auto* extName: EnabledExtensionNames)
+    {
+        extensionMap.emplace(extName, 1);
+    }
+
+    if (extensionMap.contains(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME))
+        allocatorFlags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+
+    if (extensionMap.contains(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME))
+        allocatorFlags |= VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT;
+
+    if (extensionMap.contains(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME))
+        allocatorFlags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
+
+    allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT; // Promoted to Vulkan 1.3, but VMA documentation does not show ignored.
+    allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT; // Promoted to Vulkan 1.4, but VMA documentation does not show ignored.
+
+    if (extensionMap.contains("VK_KHR_external_memory_win32"))
+        allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_EXTERNAL_MEMORY_WIN32_BIT;
+
+    VmaAllocatorCreateInfo info{};
+    info.flags = allocatorFlags;
+    info.physicalDevice = PhysicalDevice;
+    info.device = Device;
+    info.preferredLargeHeapBlockSize = 0;
+    info.pAllocationCallbacks = nullptr;
+    info.pDeviceMemoryCallbacks = nullptr;
+    info.pHeapSizeLimit = nullptr;
+
+    VmaVulkanFunctions functions{};
+    functions.vkGetInstanceProcAddr = VulkanDispatcher.vkGetInstanceProcAddr;
+    functions.vkGetDeviceProcAddr = VulkanDispatcher.vkGetDeviceProcAddr;
+    info.pVulkanFunctions = &functions;
+
+    info.instance = Instance;
+    info.vulkanApiVersion = vk::ApiVersion14;
+
+    auto res = static_cast<vk::Result>(vmaCreateAllocator(&info, &Allocator));
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kCritical, "Failed to create vulkan allocator.");
     return true;
 }
 
@@ -490,6 +588,9 @@ void VulkanCore::Teardown()
 {
     ShaderCache.reset();
     Swapchains.clear();
+
+    vmaDestroyAllocator(Allocator);
+
     if (Device)
     {
         Device.destroy();
