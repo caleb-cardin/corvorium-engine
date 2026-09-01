@@ -2,7 +2,10 @@
 module;
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
+
+#include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
+
 #include "vulkan/vulkan.hpp"
 module Rendering:VulkanSwapchainImpl;
 import :VulkanSwapchain;
@@ -140,7 +143,14 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
             CRVM_LOG(VulkanLogger, kInfo, "ImageView destroyed");
         }
         ImageViews.clear();
+
+        for (auto& pDepthImage: DepthImages)
+        {
+            pDepthImage.reset();
+        }
     }
+
+    // Surface query
 
     Util::SurfaceInfo surfaceInfo = Core->GetSurfaceInfo();
 
@@ -168,6 +178,8 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         return RenderError::WindowMinimized;
     }
 
+    // Swapchain creation
+
     vk::SwapchainCreateInfoKHR info;
     info.surface = Surface;
     info.minImageCount = std::min(surfaceCaps.surfaceCapabilities.minImageCount + 1, surfaceCaps.surfaceCapabilities.maxImageCount);
@@ -188,6 +200,8 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     const vk::ResultValue scResult = vkDevice.createSwapchainKHR(info);
     CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationFailed, VulkanLogger, kError, "Failed to create swapchain.");
     Swapchain = scResult.value;
+
+    // Swapchain Color attachments
 
     u32 imageCount;
     res = vkDevice.getSwapchainImagesKHR(Swapchain, &imageCount, nullptr);
@@ -216,6 +230,19 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
             ImageViews[i] = viewResult.value;
         }
         ++i;
+    }
+
+    // Swapchain depth stencil attachments
+    ImageCreateParams params;
+    params.Core = Core;
+    params.Extent = vk::Extent3D{extent.width, extent.height, 0};
+    params.Format = surfaceInfo.DepthStencilFormat;
+    params.QueueFamilies = IsPresentQueueUnique()
+                               ? QueueFamilyIndices.QueueFamilies
+                               : eastl::span<u32>(std::begin(QueueFamilyIndices.QueueFamilies), 1);
+    for (auto& pDepthImage: DepthImages)
+    {
+        pDepthImage = eastl::make_unique<VulkanImage>(VulkanImage::Create(params));
     }
 
     bIsOutOfDate = false;

@@ -3,7 +3,9 @@ module;
 
 #include "EASTL/sort.h"
 #include "EASTL/span.h"
+#include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
+
 #include "vulkan/vulkan.hpp"
 
 #include <limits>
@@ -11,6 +13,7 @@ module;
 module Rendering:VulkanSwapchain;
 import OS;
 import Common;
+import :VulkanImage;
 import :VulkanUtils;
 import :Types;
 
@@ -76,6 +79,9 @@ public:
     [[nodiscard]] vk::Image GetImage(u32 Index) const { return Images[Index]; }
     [[nodiscard]] vk::ImageView GetImageView(u32 Index) const { return ImageViews[Index]; }
 
+    [[nodiscard]] vk::Image GetDepthImage() { return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImage() : nullptr; }
+    [[nodiscard]] vk::ImageView GetDepthImageView() { return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImageView() : nullptr; }
+
     void GetFramebufferSize(u32& Width, u32& Height) const;
 
     [[nodiscard]] RenderError CreateOrRecreateSwapchain();
@@ -100,6 +106,8 @@ private:
     vk::SurfaceKHR Surface{nullptr};
     eastl::vector<vk::Image> Images{};
     eastl::vector<vk::ImageView> ImageViews{};
+
+    eastl::array<eastl::unique_ptr<VulkanImage>, kMaxFramesInFlight> DepthImages;
 
     QueueFamilyIndices QueueFamilyIndices;
 

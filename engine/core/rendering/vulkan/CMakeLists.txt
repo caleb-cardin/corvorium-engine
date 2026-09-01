@@ -11,6 +11,7 @@ target_sources(CorvoriumEngine
         Vulkan.cpp
         PRIVATE FILE_SET vulkan_impl TYPE CXX_MODULES FILES
         VulkanCore.cppm
+        VulkanImage.cppm
         VulkanPipeline.cppm
         VulkanPipelineUtils.cppm
         VulkanSwapchain.cppm
@@ -19,5 +20,6 @@ target_sources(CorvoriumEngine
         VulkanUtils.cppm
 
         private/VulkanCore.cppm
+        private/VulkanImage.cppm
         private/VulkanSwapchain.cppm
 )
