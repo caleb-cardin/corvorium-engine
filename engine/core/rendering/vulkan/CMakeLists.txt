@@ -21,5 +21,6 @@ target_sources(CorvoriumEngine
 
         private/VulkanCore.cppm
         private/VulkanImage.cppm
+        private/VulkanPipeline.cppm
         private/VulkanSwapchain.cppm
 )

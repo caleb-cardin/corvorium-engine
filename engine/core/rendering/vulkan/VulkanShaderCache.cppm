@@ -193,7 +193,7 @@ const VulkanShader* VulkanShaderCache::GetShader(ShaderModuleHandle Shader)
 void VulkanShaderCache::CreateDescriptorData(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
                                              eastl::vector<vk::DescriptorSetLayout>& OutLayouts)
 {
-    if (Bindings.size() == 0) return;
+    if (Bindings.empty()) return;
     u32 setCount = Bindings.back().Set + 1;
 
     eastl::vector<eastl::vector<vk::DescriptorSetLayoutBinding>> bindings{};

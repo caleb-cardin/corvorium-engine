@@ -113,6 +113,8 @@ private:
 
     u32 CurrentFrame{0};
     u32 LastAcquiredImage{~0x0u};
+    vk::Extent2D CurrentExtent{};
+
     eastl::array<vk::CommandPool, kMaxFramesInFlight> FrameCommandPools{nullptr, nullptr};
     eastl::array<FrameCommandList, kMaxFramesInFlight> FrameCommandLists{};
     eastl::array<vk::Fence, kMaxFramesInFlight> InFlightFences{nullptr, nullptr};

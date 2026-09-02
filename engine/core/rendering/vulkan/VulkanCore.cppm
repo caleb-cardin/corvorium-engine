@@ -42,7 +42,7 @@ public:
     [[nodiscard]] vk::Device GetDevice() const { return Device; }
     [[nodiscard]] VmaAllocator GetAllocator() const { return Allocator; }
 
-    [[nodiscard]] Util::SurfaceInfo GetSurfaceInfo() const { return SurfaceInfo; };
+    [[nodiscard]] const Util::SurfaceInfo& GetSurfaceInfo() const { return SurfaceInfo; };
 
     static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
 

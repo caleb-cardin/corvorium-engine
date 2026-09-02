@@ -43,10 +43,17 @@ RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProv
     }
 
     vk::SurfaceKHR MainSurface = Util::CreateWindowSurface(Instance, MainWindow);
+    if (!SelectSurfaceFormats(MainSurface))
+    {
+        Instance.destroySurfaceKHR(MainSurface);
+        Teardown();
+        return RenderError::InitializationFailed;
+    }
     bool PresentFound = FindPresentQueueFamily(MainSurface, PresentQueueFamily);
     if (!PresentFound)
     {
         Instance.destroySurfaceKHR(MainSurface);
+        Teardown();
         return RenderError::InitializationFailed;
     }
 
@@ -394,6 +401,7 @@ bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
         }
     }
     CRVM_ASSERT_MSG(depthStencilFound, "Depth/Stencil formats unsupported!");
+    return true;
 }
 
 bool VulkanCore::InitDevice()
@@ -413,7 +421,7 @@ bool VulkanCore::InitDevice()
     constexpr eastl::array<const char*, 1> reqDeviceExtNames{
         "VK_KHR_swapchain"
     };
-    constexpr const eastl::array<const char*, 10> optDeviceExtNames{
+    constexpr const eastl::array<const char*, 9> optDeviceExtNames{
         "VK_EXT_memory_budget",
         "VK_EXT_memory_priority",
         "VK_AMD_device_coherent_memory",
@@ -423,7 +431,6 @@ bool VulkanCore::InitDevice()
         "VK_KHR_acceleration_structure",
         "VK_KHR_ray_tracing_pipeline",
         "VK_EXT_mesh_shader"
-        "VK_KHR_external_memory_win32"
     };
 
     u32 propertyCount = 0;
@@ -524,7 +531,7 @@ bool VulkanCore::InitDevice()
 
 bool VulkanCore::InitAllocator(const eastl::vector<const char*>& EnabledExtensionNames)
 {
-    u32 allocatorFlags{};
+    u32 allocatorFlags{0};
 
     eastl::string_hash_map<u32> extensionMap{};
     for (const auto* extName: EnabledExtensionNames)
@@ -543,9 +550,6 @@ bool VulkanCore::InitAllocator(const eastl::vector<const char*>& EnabledExtensio
 
     allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT; // Promoted to Vulkan 1.3, but VMA documentation does not show ignored.
     allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT; // Promoted to Vulkan 1.4, but VMA documentation does not show ignored.
-
-    if (extensionMap.contains("VK_KHR_external_memory_win32"))
-        allocatorFlags |= VMA_ALLOCATOR_CREATE_KHR_EXTERNAL_MEMORY_WIN32_BIT;
 
     VmaAllocatorCreateInfo info{};
     info.flags = allocatorFlags;
@@ -589,7 +593,10 @@ void VulkanCore::Teardown()
     ShaderCache.reset();
     Swapchains.clear();
 
-    vmaDestroyAllocator(Allocator);
+    if (Allocator)
+    {
+        vmaDestroyAllocator(Allocator);
+    }
 
     if (Device)
     {

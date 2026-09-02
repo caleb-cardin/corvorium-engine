@@ -120,11 +120,25 @@ public:
     [[nodiscard]] const eastl::vector<ColorBlendType>& GetColorBlends() const { return ColorBlends; }
     GraphicsPipelineDescBuilder& SetColorBlends(ColorBlendType ColorBlend, u32 Count);
 
-    GraphicsPipelineDescBuilder& SetPrimitiveType(PrimitiveType InType) { Primitive = InType; }
-    GraphicsPipelineDescBuilder& SetDepthTestType(DepthTestType InType) { DepthTest = InType; }
-    GraphicsPipelineDescBuilder& SetBackfaceCullEnabled(bool Enabled) { BackfaceCullEnabled = Enabled; }
+    GraphicsPipelineDescBuilder& SetPrimitiveType(PrimitiveType InType)
+    {
+        Primitive = InType;
+        return *this;
+    }
 
-    [[nodiscard]] ResultValue<vk::GraphicsPipelineCreateInfo> MakeGraphicsPipelineCreateInfo() const;
+    GraphicsPipelineDescBuilder& SetDepthTestType(DepthTestType InType)
+    {
+        DepthTest = InType;
+        return *this;
+    }
+
+    GraphicsPipelineDescBuilder& SetBackfaceCullEnabled(bool Enabled)
+    {
+        BackfaceCullEnabled = Enabled;
+        return *this;
+    }
+
+    [[nodiscard]] ResultValue<vk::GraphicsPipelineCreateInfo> Build() const;
 
 private:
     vk::PipelineRenderingCreateInfo* RenderingCreateInfo{nullptr};
@@ -189,7 +203,7 @@ GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetColorBlends(ColorBl
     return *this;
 }
 
-ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::MakeGraphicsPipelineCreateInfo() const
+ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::Build() const
 {
     CRVM_LOG_RETURN_IF(!IsComplete(),
                        ResultError(RenderError::InitializationFailed),
@@ -201,9 +215,9 @@ ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::MakeGra
 
     info.pNext = GetRenderingCreateInfo();
 
-    const auto& ShaderStages = GetShaderStages();
+    const auto& stages = GetShaderStages();
     info.stageCount = static_cast<u32>(ShaderStages.size());
-    info.pStages = ShaderStages.data();
+    info.pStages = stages.data();
 
     switch (Primitive)
     {

@@ -7,20 +7,20 @@ module;
 #include "vulkan/vulkan.hpp"
 module Rendering:VulkanPipeline;
 import :Types;
-import :VulkanPipelineUtils;
 import :VulkanShaderCache;
 import Common;
 
 namespace Corvorium::Rendering::Vulkan {
+class VulkanCore;
+
 struct PipelineCreateParamsBase {
-    vk::Device InDevice{nullptr};
+    VulkanCore* Core{nullptr};
     vk::PipelineCache PipelineCache{nullptr};
     VulkanShaderCache* ShaderCache{nullptr};
 };
 
 struct VulkanGraphicsPipelineCreateParams : public PipelineCreateParamsBase {
     Corvorium::Rendering::GraphicsPipelineCreateParams External{};
-
 };
 
 struct ComputePipelineCreateParams {};
@@ -35,10 +35,10 @@ enum class PipelineType : u8 {
 
 class VulkanPipeline {
 public:
-    VulkanPipeline() = default;
-    VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const VulkanGraphicsPipelineCreateParams& Params);
-    VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const ComputePipelineCreateParams& Params);
-    VulkanPipeline(vk::Device InDevice, vk::PipelineCache Cache, const RaytracingPipelineCreateParams& Params);
+    VulkanPipeline() = delete;
+    ResultValue<VulkanPipeline> Create(const VulkanGraphicsPipelineCreateParams& Params);
+    ResultValue<VulkanPipeline> Create(const ComputePipelineCreateParams& Params);
+    ResultValue<VulkanPipeline> Create(const RaytracingPipelineCreateParams& Params);
 
     VulkanPipeline(const VulkanPipeline& Other) = delete;
     VulkanPipeline(VulkanPipeline&& Other) noexcept = default;
@@ -52,78 +52,10 @@ public:
 
 private:
     PipelineType Type;
-    vk::Device Device;
+    VulkanCore* Core;
     vk::Pipeline Pipeline;
     vk::PipelineLayout Layout;
+
+    VulkanPipeline(PipelineType InType, VulkanCore* InCore, vk::Pipeline InPipeline, vk::PipelineLayout InLayout);
 };
-
-
-VulkanPipeline::VulkanPipeline(vk::Device InDevice,
-                               vk::PipelineCache Cache,
-                               const VulkanGraphicsPipelineCreateParams& Params)
-    : Type{PipelineType::Graphics}
-    , Device{InDevice}
-{
-    CRVM_ASSERT(Params.External.Module != ShaderModuleHandle::kInvalidHandle);
-
-
-    const VulkanShader* shader = Params.ShaderCache->GetShader(Params.External.Module);
-    CRVM_ASSERT(shader);
-
-    eastl::vector<GraphicsPipelineDescBuilder::ShaderStageInfo> StageInfos;
-    StageInfos.reserve(shader->EntryPoints.size());
-
-    for (const auto& entryPoint: shader->EntryPoints)
-    {
-        StageInfos.emplace_back(GraphicsPipelineDescBuilder::ShaderStageInfo{
-            Util::ToVulkanType(entryPoint.Stage), entryPoint.Name.c_str()
-        });
-    }
-
-    vk::PipelineRenderingCreateInfo renderInfo;
-    renderInfo.
-
-    auto builder = GraphicsPipelineDescBuilder()
-            .SetRenderingCreateInfo(renderingInfo)
-            .AddMultiShader(shader->Module, StageInfos)
-            .SetLayout(shader->Layout)
-            .SetColorBlends(Params.External.ColorBlend, attachmentCount/*TODO*/)
-            .SetPrimitiveType(Params.External.Primitive)
-            .SetDepthTestType(Params.External.DepthTest)
-            .SetBackfaceCullEnabled(Params.External.BackfaceCullEnabled);
-
-    vk::GraphicsPipelineCreateInfo info = builder.MakeGraphicsPipelineCreateInfo();
-
-    auto result = Device.createGraphicsPipeline(Cache, info);
-}
-
-
-VulkanPipeline::VulkanPipeline(vk::Device InDevice,
-                               vk::PipelineCache Cache,
-                               const ComputePipelineCreateParams& Params)
-    : Type{PipelineType::Compute}
-    , Device{InDevice}
-{
-    vk::GraphicsPipelineCreateInfo info;
-
-    auto result = Device.createGraphicsPipeline(Cache, info);
-}
-
-
-VulkanPipeline::VulkanPipeline(vk::Device InDevice,
-                               vk::PipelineCache Cache,
-                               const RaytracingPipelineCreateParams& Params)
-    : Type{PipelineType::Raytracing}
-    , Device{InDevice}
-{
-    vk::RayTracingPipelineCreateInfoKHR info;
-
-    //auto result = Device.createRayTracingPipelineKHR(Cache, info);
-}
-
-
-VulkanPipeline::~VulkanPipeline()
-{
-    Device.destroyPipeline(Pipeline);
-}
 }

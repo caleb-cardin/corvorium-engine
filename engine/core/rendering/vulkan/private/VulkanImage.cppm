@@ -84,13 +84,13 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
     viewInfo.viewType = vk::ImageViewType::e2D;
     viewInfo.format = Params.Format;
     viewInfo.components = vk::ComponentMapping{};
-    viewInfo.subresourceRange = vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0u,
-        .levelCount = 1u,
-        .baseArrayLayer = 0u,
-        .layerCount = 1u
-    };
+
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+    viewInfo.subresourceRange.baseMipLevel = 0u;
+    viewInfo.subresourceRange.levelCount = 1u;
+    viewInfo.subresourceRange.baseArrayLayer = 0u;
+    viewInfo.subresourceRange.layerCount = 1u;
+
 
     vk::ImageView view; {
         const auto result = device.createImageView(viewInfo);
@@ -106,13 +106,42 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
     return VulkanImage(Params.Core, image, view, allocation);
 }
 
+VulkanImage::VulkanImage(VulkanImage&& Other) noexcept
+    : Core{Other.Core}
+    , Image{Other.Image}
+    , ImageView{Other.ImageView}
+    , Allocation{Other.Allocation}
+{
+    Other.Core = nullptr;
+    Other.Image = nullptr;
+    Other.ImageView = nullptr;
+    Other.Allocation = nullptr;
+}
+
+VulkanImage& VulkanImage::operator=(VulkanImage&& Other) noexcept
+{
+    Core = Other.Core;
+    Image = Other.Image;
+    ImageView = Other.ImageView;
+    Allocation = Other.Allocation;
+
+    Other.Core = nullptr;
+    Other.Image = nullptr;
+    Other.ImageView = nullptr;
+    Other.Allocation = nullptr;
+    return *this;
+}
+
 VulkanImage::~VulkanImage()
 {
-    vk::Device device = Core->GetDevice();
-    device.destroyImageView(ImageView);
+    if (Core)
+    {
+        vk::Device device = Core->GetDevice();
+        if (ImageView) device.destroyImageView(ImageView);
 
-    VmaAllocator allocator = Core->GetAllocator();
-    vmaDestroyImage(allocator, Image, Allocation);
+        VmaAllocator allocator = Core->GetAllocator();
+        vmaDestroyImage(allocator, Image, Allocation);
+    }
 }
 
 VulkanImage::VulkanImage(VulkanCore* Core, vk::Image Image, vk::ImageView View, VmaAllocation Alloc)

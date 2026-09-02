@@ -13,6 +13,7 @@ export enum class RenderError {
     Success = 0,
     InitializationFailed,
     AlreadyInitialized,
+    InvalidParameters,
     InvalidHandle,
 
     // Framebuffer/swapchain

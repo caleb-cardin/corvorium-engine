@@ -26,9 +26,10 @@ public:
     static ResultValue<VulkanImage> Create(const ImageCreateParams& Params);
 
     VulkanImage(const VulkanImage& Other) = delete;
-    VulkanImage(VulkanImage&& Other) noexcept = default;
-    auto operator=(const VulkanImage& Other) -> VulkanImage& = delete;
-    auto operator=(VulkanImage&& Other) noexcept -> VulkanImage& = default;
+    VulkanImage& operator=(const VulkanImage& Other) = delete;
+
+    VulkanImage(VulkanImage&& Other) noexcept;
+    VulkanImage& operator=(VulkanImage&& Other) noexcept;
 
     ~VulkanImage();
 

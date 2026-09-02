@@ -96,6 +96,11 @@ void VulkanSwapchain::Teardown()
         ImageViews.clear();
         Images.clear();
 
+        for (auto& pDepth: DepthImages)
+        {
+            pDepth.reset();
+        }
+
         if (Swapchain) vkDevice.destroySwapchainKHR(Swapchain);
 
         for (const auto& cmdPool: FrameCommandPools)
@@ -152,7 +157,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 
     // Surface query
 
-    Util::SurfaceInfo surfaceInfo = Core->GetSurfaceInfo();
+    const Util::SurfaceInfo& surfaceInfo = Core->GetSurfaceInfo();
 
     vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo2;
     surfaceInfo2.surface = Surface;
@@ -185,7 +190,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     info.minImageCount = std::min(surfaceCaps.surfaceCapabilities.minImageCount + 1, surfaceCaps.surfaceCapabilities.maxImageCount);
     info.imageFormat = surfaceInfo.ColorFormat.format;
     info.imageColorSpace = surfaceInfo.ColorFormat.colorSpace;
-    info.imageExtent = surfaceCaps.surfaceCapabilities.currentExtent;
+    info.imageExtent = extent;
     info.imageArrayLayers = 1;
     info.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
     info.imageSharingMode = IsPresentQueueUnique() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive;
@@ -200,7 +205,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     const vk::ResultValue scResult = vkDevice.createSwapchainKHR(info);
     CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationFailed, VulkanLogger, kError, "Failed to create swapchain.");
     Swapchain = scResult.value;
-
+    CurrentExtent = extent;
     // Swapchain Color attachments
 
     u32 imageCount;
@@ -235,14 +240,22 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     // Swapchain depth stencil attachments
     ImageCreateParams params;
     params.Core = Core;
-    params.Extent = vk::Extent3D{extent.width, extent.height, 0};
+    params.Extent = vk::Extent3D{extent.width, extent.height, 1};
     params.Format = surfaceInfo.DepthStencilFormat;
     params.QueueFamilies = IsPresentQueueUnique()
                                ? QueueFamilyIndices.QueueFamilies
                                : eastl::span<u32>(std::begin(QueueFamilyIndices.QueueFamilies), 1);
+    params.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+
     for (auto& pDepthImage: DepthImages)
     {
-        pDepthImage = eastl::make_unique<VulkanImage>(VulkanImage::Create(params));
+        ResultValue<VulkanImage> depthResult = VulkanImage::Create(params);
+        CRVM_LOG_RETURN_IF(!depthResult.has_value(),
+                           RenderError::InitializationFailed,
+                           VulkanLogger,
+                           kError,
+                           "Failed to create depth attachment images.");
+        pDepthImage = eastl::make_unique<VulkanImage>(eastl::move(depthResult.value()));
     }
 
     bIsOutOfDate = false;
@@ -331,7 +344,8 @@ vk::Result VulkanSwapchain::InitializedCommandList()
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
 
     // Pipeline barrier
-    vk::ImageMemoryBarrier2 imgBarrier;
+    eastl::array<vk::ImageMemoryBarrier2, 2> barriers{};
+    vk::ImageMemoryBarrier2& imgBarrier = barriers[0];
     imgBarrier.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
     imgBarrier.srcAccessMask = vk::AccessFlagBits2::eNone;
     imgBarrier.dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
@@ -349,9 +363,27 @@ vk::Result VulkanSwapchain::InitializedCommandList()
         1u
     };
 
+    vk::ImageMemoryBarrier2& depthBarrier = barriers[1];
+    depthBarrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
+    depthBarrier.srcAccessMask = vk::AccessFlagBits2::eNone;
+    depthBarrier.dstStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
+    depthBarrier.dstAccessMask = vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite;
+    depthBarrier.oldLayout = vk::ImageLayout::eUndefined;
+    depthBarrier.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    depthBarrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+    depthBarrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+    depthBarrier.image = DepthImages[CurrentFrame]->GetImage();
+    depthBarrier.subresourceRange = vk::ImageSubresourceRange{
+        vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil,
+        1u,
+        1u,
+        0u,
+        1u
+    };
+
     vk::DependencyInfo beginDep;
-    beginDep.imageMemoryBarrierCount = 1u;
-    beginDep.pImageMemoryBarriers = &imgBarrier;
+    beginDep.imageMemoryBarrierCount = static_cast<u32>(barriers.size());
+    beginDep.pImageMemoryBarriers = barriers.data();
 
     cbBegin.pipelineBarrier2(beginDep);
 
@@ -360,10 +392,20 @@ vk::Result VulkanSwapchain::InitializedCommandList()
     colorAttachInfo.imageView = GetImageView(LastAcquiredImage);
     colorAttachInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
     // TODO : MSAA
-    colorAttachInfo.clearValue = vk::ClearColorValue{0.f, 0.f, 0.f, 0.f};
+    colorAttachInfo.clearValue = vk::ClearColorValue{0.f, 0.f, 0.f, 1.f};
+
+    vk::RenderingAttachmentInfo depthAttachInfo;
+    depthAttachInfo.imageView = DepthImages[CurrentFrame]->GetImageView();
+    depthAttachInfo.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    depthAttachInfo.loadOp = vk::AttachmentLoadOp::eClear;
+    depthAttachInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
 
     vk::RenderingInfo renderInfo;
+    renderInfo.renderArea = vk::Rect2D{CurrentExtent.width, CurrentExtent.height};
+    renderInfo.layerCount = 1;
     renderInfo.colorAttachmentCount = 1;
+    renderInfo.pColorAttachments = &colorAttachInfo;
+    renderInfo.pDepthAttachment = &depthAttachInfo;
 
     cbBegin.beginRendering(renderInfo);
 
@@ -383,7 +425,7 @@ vk::Result VulkanSwapchain::InitializedCommandList()
     imgBarrierEnd.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
     imgBarrierEnd.subresourceRange = vk::ImageSubresourceRange{
         vk::ImageAspectFlagBits::eColor,
-        1u, 1u, 0u, 1u
+        0u, 1u, 0u, 1u
     };
 
     imgBarrier.image = GetImage(LastAcquiredImage);
