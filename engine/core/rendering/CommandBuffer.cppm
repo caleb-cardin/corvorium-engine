@@ -22,10 +22,13 @@ public:
     CommandBuffer& operator=(CommandBuffer&&) noexcept;
     ~CommandBuffer();
 
-    void Begin();
-    void BindGraphicsPipeline(PipelineHandle Pipeline);
-    void DrawMesh(MeshHandle Mesh);
-    void End();
+    [[nodiscard]] bool Begin() const;
+    void BeginRendering() const;
+    void BindGraphicsPipeline(PipelineHandle Pipeline) const;
+    void TESTING_DrawTriangle() const;
+    void DrawMesh(MeshHandle Mesh) const;
+    void EndRendering() const;
+    [[nodiscard]] bool End() const;
 
 private:
     friend class Vulkan::VulkanCore;

@@ -153,7 +153,7 @@ RenderError VulkanCore::BeginFrame(OS::WindowHandle Window)
     res = swapchain.Reset();
     CRVM_ASSERT(res == vk::Result::eSuccess);
 
-    res = swapchain.InitializedCommandList();
+    res = swapchain.InitializeCommandList();
     CRVM_ASSERT(res == vk::Result::eSuccess);
     return RenderError::Success;
 }
@@ -176,7 +176,7 @@ ResultValue<CommandBuffer> VulkanCore::AllocateCommandBuffer(OS::WindowHandle Wi
     vk::Result res = swapchain.AllocateCommandBuffer(Priority, cb);
     CRVM_ASSERT(res == vk::Result::eSuccess);
 
-    return CommandBuffer{eastl::make_unique<CommandBufferImpl>(VulkanCommandBuffer{this, cb})};
+    return CommandBuffer{eastl::make_unique<CommandBufferImpl>(VulkanCommandBuffer{this, &swapchain, cb})};
 }
 
 RenderError VulkanCore::EndFrame(OS::WindowHandle Window)
@@ -205,9 +205,21 @@ ResultValue<ShaderModuleHandle> VulkanCore::CreateShaderModule(const eastl::stri
     return ResultError(RenderError::InternalError);
 }
 
-ResultValue<PipelineHandle> VulkanCore::CreatePipeline(ShaderModuleHandle Shader)
+ResultValue<PipelineHandle> VulkanCore::CreatePipeline(const GraphicsPipelineCreateParams& Params)
 {
-    return ResultError(RenderError::InternalError);
+    VulkanGraphicsPipelineCreateParams internalParams{};
+    internalParams.Core = this;
+    internalParams.ShaderCache = ShaderCache.get();
+    internalParams.PipelineCache = {nullptr};
+    internalParams.External = Params;
+
+    ResultValue<VulkanPipeline> pipelineRes = VulkanPipeline::Create(internalParams);
+    CRVM_LOG_RETURN_IF(!pipelineRes.has_value(), ResultError(RenderError::InternalError), VulkanLogger, kError, "Pipeline creation failed.");
+
+    auto [it, success] = Pipelines.try_emplace(pipelineRes.value().GetHandle(), eastl::move(pipelineRes.value()));
+    CRVM_ASSERT(success);
+
+    return it->second.GetHandle();
 }
 
 void VulkanCore::OnWindowClosed(OS::Window* Window, void* OwningDevice)
@@ -222,12 +234,12 @@ void VulkanCore::OnWindowClosed(OS::Window* Window, void* OwningDevice)
     }
 }
 
-vk::Pipeline VulkanCore::FindPipeline(PipelineHandle Pipeline)
+const VulkanPipeline* VulkanCore::FindPipeline(PipelineHandle Pipeline)
 {
     auto it = Pipelines.find(Pipeline);
     if (it != Pipelines.end())
     {
-        return it->second.Get();
+        return &it->second;
     }
     return nullptr;
 }
@@ -355,6 +367,24 @@ bool VulkanCore::SelectPhysicalDevice()
     return true;
 }
 
+static vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
+{
+    for (const auto& format: Formats)
+    {
+        if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
+        {
+            return format;
+        }
+    }
+    return Formats[0];
+}
+
+static vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
+{
+    for (const auto& mode: Modes) { if (mode == vk::PresentModeKHR::eMailbox) return mode; }
+    return vk::PresentModeKHR::eFifo;
+}
+
 bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
 {
     CRVM_ASSERT(Surface);
@@ -373,7 +403,7 @@ bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
     res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data(), VulkanDispatcher);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface formats.");
 
-    const vk::SurfaceFormat2KHR selectedFormat = Util::SelectOptimalFormat(surfaceFormats);
+    const vk::SurfaceFormat2KHR selectedFormat = SelectOptimalFormat(surfaceFormats);
     SurfaceInfo.ColorFormat = selectedFormat.surfaceFormat;
 
     u32 presentModeCount = 0;
@@ -383,7 +413,7 @@ bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
     res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data(), VulkanDispatcher);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface present modes.");
 
-    SurfaceInfo.PresentMode = Util::SelectOptimalPresentMode(surfacePresentModes);
+    SurfaceInfo.PresentMode = SelectOptimalPresentMode(surfacePresentModes);
 
     static constexpr eastl::array<vk::Format, 3> kDepthFormats{
         vk::Format::eD32SfloatS8Uint,
@@ -465,11 +495,13 @@ bool VulkanCore::InitDevice()
     // Features
 
     vk::PhysicalDeviceFeatures2 coreFeatures;
+    vk::PhysicalDeviceVulkan11Features features11;
     vk::PhysicalDeviceVulkan12Features features12;
     vk::PhysicalDeviceVulkan13Features features13;
     vk::PhysicalDeviceVulkan14Features features14;
     vk::PhysicalDeviceDynamicRenderingFeatures drFeatures;
-    coreFeatures.pNext = &features12;
+    coreFeatures.pNext = &features11;
+    features11.pNext = &features12;
     features12.pNext = &features13;
     features13.pNext = &features14;
     features14.pNext = &drFeatures;
@@ -477,7 +509,9 @@ bool VulkanCore::InitDevice()
     PhysicalDevice.getFeatures2(&coreFeatures);
     vk::PhysicalDeviceFeatures enabledCoreFeatures;
 
+    vk::PhysicalDeviceVulkan11Features enabledFeatures11;
     vk::PhysicalDeviceVulkan12Features enabledFeatures12;
+    enabledFeatures11.pNext = enabledFeatures12;
     vk::PhysicalDeviceVulkan13Features enabledFeatures13;
     enabledFeatures12.pNext = &enabledFeatures13;
     vk::PhysicalDeviceVulkan14Features enabledFeatures14;
@@ -491,6 +525,8 @@ bool VulkanCore::InitDevice()
     enabledCoreFeatures.geometryShader = coreFeatures.features.geometryShader;
     enabledCoreFeatures.tessellationShader = coreFeatures.features.tessellationShader;
     enabledCoreFeatures.dualSrcBlend = coreFeatures.features.dualSrcBlend;
+
+    enabledFeatures11.shaderDrawParameters = features11.shaderDrawParameters;
 
     enabledFeatures12.descriptorIndexing = features12.descriptorIndexing;
     enabledFeatures12.bufferDeviceAddress = features12.bufferDeviceAddress;
@@ -507,7 +543,7 @@ bool VulkanCore::InitDevice()
     enabledDynamicRenderingFeatures.dynamicRendering = drFeatures.dynamicRendering;
 
     info.pEnabledFeatures = &enabledCoreFeatures;
-    info.pNext = &enabledFeatures12;
+    info.pNext = &enabledFeatures11;
 
 
     if (vk::ResultValue result = PhysicalDevice.createDevice(info);
@@ -590,6 +626,9 @@ bool VulkanCore::InitPipelineCache()
 
 void VulkanCore::Teardown()
 {
+    Device.waitIdle();
+
+    Pipelines.clear();
     ShaderCache.reset();
     Swapchains.clear();
 

@@ -60,21 +60,6 @@ Application::Application(eastl::string&& AppName)
         return;
     }
 
-    eastl::string physicalPath = (std::filesystem::current_path()
-                                  / std::filesystem::path("resources")
-                                  / std::filesystem::path("shaders")).string().c_str();
-    FileSystem->Mount(physicalPath, "shaders");
-
-    Rendering::ResultValue<Rendering::ShaderModuleHandle> shaderRes = Rendering->CreateShaderModule("shaders://Test.slang");
-    if (!shaderRes.has_value())
-    {
-        CRVM_LOG(AppLogger, kInfo, "Shader creation failed");
-    }
-    else
-    {
-        CRVM_LOG(AppLogger, kInfo, "Shader creation succeeded");
-    }
-
     Initialized = true;
 }
 
@@ -85,9 +70,42 @@ bool Application::IsInitialized() const
 
 void Application::Run()
 {
+    eastl::string physicalPath = (std::filesystem::current_path()
+                                  / std::filesystem::path("resources")
+                                  / std::filesystem::path("shaders")).string().c_str();
+    FileSystem->Mount(physicalPath, "shaders");
+
+    Rendering::ResultValue<Rendering::ShaderModuleHandle> shaderRes = Rendering->CreateShaderModule("shaders://Test.slang");
+    if (!shaderRes.has_value()) return;
+
+    Rendering::GraphicsPipelineCreateParams graphicsParams{};
+    graphicsParams.Module = shaderRes.value();
+    graphicsParams.ColorBlend = Rendering::ColorBlendType::None;
+    graphicsParams.DepthTest = Rendering::DepthTestType::Opaque;
+    graphicsParams.Primitive = Rendering::PrimitiveType::TriangleList;
+
+    Rendering::ResultValue<Rendering::PipelineHandle> pipelineRes = Rendering->CreatePipeline(graphicsParams);
+    if (!pipelineRes.has_value()) return;
+
     while (!WindowManager->IsWindowClosed(MainWindowHandle))
     {
         OS::Window::PollEvents();
+
+        if (!WindowManager->IsWindowClosed(MainWindowHandle) &&
+            Rendering->BeginFrame(MainWindowHandle) == Rendering::RenderError::Success)
+        {
+            auto cb = Rendering->AllocateCommandBuffer(MainWindowHandle, 0);
+            if (cb.has_value() && cb->Begin())
+            {
+                cb->BeginRendering();
+                cb->BindGraphicsPipeline(pipelineRes.value());
+                cb->TESTING_DrawTriangle();
+                cb->EndRendering();
+                cb->End();
+            }
+
+            Rendering->EndFrame(MainWindowHandle);
+        }
     }
 }
 }

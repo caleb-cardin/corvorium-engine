@@ -31,6 +31,6 @@ public:
     [[nodiscard]] virtual RenderError EndFrame(OS::WindowHandle Window) = 0;
 
     [[nodiscard]] virtual ResultValue<ShaderModuleHandle> CreateShaderModule(const eastl::string& Name) = 0;
-    [[nodiscard]] virtual ResultValue<PipelineHandle> CreatePipeline(ShaderModuleHandle Shader) = 0;
+    [[nodiscard]] virtual ResultValue<PipelineHandle> CreatePipeline(const GraphicsPipelineCreateParams& Params) = 0;
 };
 }

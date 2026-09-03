@@ -74,6 +74,5 @@ export struct GraphicsPipelineCreateParams {
     PrimitiveType Primitive;
     DepthTestType DepthTest;
     ColorBlendType ColorBlend;
-    bool BackfaceCullEnabled;
 };
 }

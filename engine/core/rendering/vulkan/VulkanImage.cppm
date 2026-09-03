@@ -28,20 +28,20 @@ public:
     VulkanImage(const VulkanImage& Other) = delete;
     VulkanImage& operator=(const VulkanImage& Other) = delete;
 
-    VulkanImage(VulkanImage&& Other) noexcept;
-    VulkanImage& operator=(VulkanImage&& Other) noexcept;
+    VulkanImage(VulkanImage&& Other) noexcept = default;
+    VulkanImage& operator=(VulkanImage&& Other) noexcept = default;
 
     ~VulkanImage();
 
-    [[nodiscard]] vk::Image GetImage() const {return Image;}
-    [[nodiscard]] vk::ImageView GetImageView() const {return ImageView;}
-    [[nodiscard]] VmaAllocation GetAllocation() const {return Allocation;}
+    [[nodiscard]] vk::Image GetImage() const { return Image; }
+    [[nodiscard]] vk::ImageView GetImageView() const { return ImageView; }
+    [[nodiscard]] VmaAllocation GetAllocation() const { return Allocation; }
 
 private:
-    VulkanCore* Core{nullptr};
-    vk::Image Image{nullptr};
-    vk::ImageView ImageView{nullptr};
-    VmaAllocation Allocation{nullptr};
+    Auto<VulkanCore*> Core{nullptr};
+    Auto<vk::Image> Image{nullptr};
+    Auto<vk::ImageView> ImageView{nullptr};
+    Auto<VmaAllocation> Allocation{nullptr};
 
     VulkanImage(VulkanCore* Core, vk::Image Image, vk::ImageView View, VmaAllocation Alloc);
 };

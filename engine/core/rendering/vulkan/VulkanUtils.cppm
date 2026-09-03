@@ -48,6 +48,7 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
     }
     default: { break; }
     }
+    DebugBreak();
     return VK_FALSE;
 }
 
@@ -63,24 +64,6 @@ vk::SurfaceKHR CreateWindowSurface(const vk::Instance Instance, const OS::Window
     VkResult res = glfwCreateWindowSurface(Instance, static_cast<GLFWwindow*>(Window->GetWindowRaw()), nullptr, &surface);
     CRVM_LOG_RETURN_IF(res != VK_SUCCESS, nullptr, VulkanLogger, kError, "Failed to create surface.");
     return surface;
-}
-
-vk::SurfaceFormat2KHR SelectOptimalFormat(const eastl::vector<vk::SurfaceFormat2KHR>& Formats)
-{
-    for (const auto& format: Formats)
-    {
-        if (format.surfaceFormat.format == vk::Format::eB8G8R8A8Srgb && format.surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
-        {
-            return format;
-        }
-    }
-    return Formats[0];
-}
-
-vk::PresentModeKHR SelectOptimalPresentMode(const eastl::vector<vk::PresentModeKHR>& Modes)
-{
-    for (const auto& mode: Modes) { if (mode == vk::PresentModeKHR::eMailbox) return mode; }
-    return vk::PresentModeKHR::eFifo;
 }
 
 vk::ShaderStageFlags ToVulkanType(ShaderStageFlags StageFlags)

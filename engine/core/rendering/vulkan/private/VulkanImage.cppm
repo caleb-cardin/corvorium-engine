@@ -106,32 +106,6 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
     return VulkanImage(Params.Core, image, view, allocation);
 }
 
-VulkanImage::VulkanImage(VulkanImage&& Other) noexcept
-    : Core{Other.Core}
-    , Image{Other.Image}
-    , ImageView{Other.ImageView}
-    , Allocation{Other.Allocation}
-{
-    Other.Core = nullptr;
-    Other.Image = nullptr;
-    Other.ImageView = nullptr;
-    Other.Allocation = nullptr;
-}
-
-VulkanImage& VulkanImage::operator=(VulkanImage&& Other) noexcept
-{
-    Core = Other.Core;
-    Image = Other.Image;
-    ImageView = Other.ImageView;
-    Allocation = Other.Allocation;
-
-    Other.Core = nullptr;
-    Other.Image = nullptr;
-    Other.ImageView = nullptr;
-    Other.Allocation = nullptr;
-    return *this;
-}
-
 VulkanImage::~VulkanImage()
 {
     if (Core)
@@ -140,7 +114,7 @@ VulkanImage::~VulkanImage()
         if (ImageView) device.destroyImageView(ImageView);
 
         VmaAllocator allocator = Core->GetAllocator();
-        vmaDestroyImage(allocator, Image, Allocation);
+        vmaDestroyImage(allocator, Image.Native(), Allocation);
     }
 }
 

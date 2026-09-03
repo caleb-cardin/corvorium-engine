@@ -65,16 +65,16 @@ bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
         cmdPool = result.value;
     }
 
-    if (!CreateSyncPrimitives())
+    if (CreateOrRecreateSwapchain() != RenderError::Success)
     {
-        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain sync primitives.");
+        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain.");
         Teardown();
         return false;
     }
 
-    if (CreateOrRecreateSwapchain() != RenderError::Success)
+    if (!CreateSyncPrimitives())
     {
-        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain.");
+        CRVM_LOG(VulkanLogger, kError, "Failed to create swapchain sync primitives.");
         Teardown();
         return false;
     }
@@ -85,9 +85,11 @@ bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
 
 void VulkanSwapchain::Teardown()
 {
-    if (Initialized)
+    if (Initialized && Core)
     {
         vk::Device vkDevice = Core->GetDevice();
+
+        Reset();
 
         for (auto view: ImageViews)
         {
@@ -105,16 +107,16 @@ void VulkanSwapchain::Teardown()
 
         for (const auto& cmdPool: FrameCommandPools)
         {
-            vkDevice.destroyCommandPool(cmdPool);
+            if (cmdPool) vkDevice.destroyCommandPool(cmdPool);
         }
 
         for (const auto& fence: InFlightFences)
         {
-            vkDevice.destroyFence(fence);
+            if (fence) vkDevice.destroyFence(fence);
         }
         for (const auto& semaphore: ImageAvailableSemaphores)
         {
-            vkDevice.destroySemaphore(semaphore);
+            if (semaphore) vkDevice.destroySemaphore(semaphore);
         }
         for (const auto& semaphore: FrameCompleteSemaphores)
         {
@@ -136,16 +138,19 @@ void VulkanSwapchain::GetFramebufferSize(u32& Width, u32& Height) const
 
 RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 {
+    // TEMPORARY FIX TODO: Correctly handle swapchain resizing to avoid images destroy-during-use.
+    vk::Device vkDevice = Core->GetDevice();
+    vkDevice.waitIdle();
+
+
     Initialized = false;
 
-    vk::Device vkDevice = Core->GetDevice();
     if (Swapchain)
     {
         Images.clear();
         for (auto view: ImageViews)
         {
             vkDevice.destroyImageView(view);
-            CRVM_LOG(VulkanLogger, kInfo, "ImageView destroyed");
         }
         ImageViews.clear();
 
@@ -171,12 +176,12 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     {
         GetFramebufferSize(extent.width, extent.height);
 
-        eastl::clamp(extent.width,
-                     surfaceCaps.surfaceCapabilities.minImageExtent.width,
-                     surfaceCaps.surfaceCapabilities.maxImageExtent.width);
-        eastl::clamp(extent.height,
-                     surfaceCaps.surfaceCapabilities.minImageExtent.height,
-                     surfaceCaps.surfaceCapabilities.maxImageExtent.height);
+        extent.width = eastl::clamp(extent.width,
+                                    surfaceCaps.surfaceCapabilities.minImageExtent.width,
+                                    surfaceCaps.surfaceCapabilities.maxImageExtent.width);
+        extent.height = eastl::clamp(extent.height,
+                                     surfaceCaps.surfaceCapabilities.minImageExtent.height,
+                                     surfaceCaps.surfaceCapabilities.maxImageExtent.height);
     }
     if (extent.width == 0 || extent.height == 0)
     {
@@ -328,20 +333,20 @@ vk::Result VulkanSwapchain::AcquireImage()
 vk::Result VulkanSwapchain::Reset()
 {
     vk::Device vkDevice = Core->GetDevice();
-    vk::Result res = vkDevice.resetCommandPool(FrameCommandPools[CurrentFrame]);
+    vk::Result res = vkDevice.resetCommandPool(FrameCommandPools[CurrentFrame], vk::CommandPoolResetFlagBits::eReleaseResources);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
     FrameCommandLists[CurrentFrame].CommandBuffers.clear();
     return vk::Result::eSuccess;
 }
 
-vk::Result VulkanSwapchain::InitializedCommandList()
+vk::Result VulkanSwapchain::InitializeCommandList()
 {
     vk::CommandBuffer cbBegin;
-    vk::Result res = AllocateCommandBuffer(kOrderPriorityMin, cbBegin);
+    vk::Result res = AllocateCommandBuffer(kOrderPriorityMax, cbBegin);
 
     vk::CommandBufferBeginInfo beginInfo;
-    res = cbBegin.begin(beginInfo);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
+    vk::Result beginResult = cbBegin.begin(beginInfo);
+    CRVM_LOG_RETURN_IF(beginResult != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
 
     // Pipeline barrier
     eastl::array<vk::ImageMemoryBarrier2, 2> barriers{};
@@ -357,7 +362,7 @@ vk::Result VulkanSwapchain::InitializedCommandList()
     imgBarrier.image = GetImage(LastAcquiredImage);
     imgBarrier.subresourceRange = vk::ImageSubresourceRange{
         vk::ImageAspectFlagBits::eColor,
-        1u,
+        0u,
         1u,
         0u,
         1u
@@ -375,7 +380,7 @@ vk::Result VulkanSwapchain::InitializedCommandList()
     depthBarrier.image = DepthImages[CurrentFrame]->GetImage();
     depthBarrier.subresourceRange = vk::ImageSubresourceRange{
         vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil,
-        1u,
+        0u,
         1u,
         0u,
         1u
@@ -387,32 +392,14 @@ vk::Result VulkanSwapchain::InitializedCommandList()
 
     cbBegin.pipelineBarrier2(beginDep);
 
-    // Dynamic rendering
-    vk::RenderingAttachmentInfo colorAttachInfo;
-    colorAttachInfo.imageView = GetImageView(LastAcquiredImage);
-    colorAttachInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-    // TODO : MSAA
-    colorAttachInfo.clearValue = vk::ClearColorValue{0.f, 0.f, 0.f, 1.f};
-
-    vk::RenderingAttachmentInfo depthAttachInfo;
-    depthAttachInfo.imageView = DepthImages[CurrentFrame]->GetImageView();
-    depthAttachInfo.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-    depthAttachInfo.loadOp = vk::AttachmentLoadOp::eClear;
-    depthAttachInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
-
-    vk::RenderingInfo renderInfo;
-    renderInfo.renderArea = vk::Rect2D{CurrentExtent.width, CurrentExtent.height};
-    renderInfo.layerCount = 1;
-    renderInfo.colorAttachmentCount = 1;
-    renderInfo.pColorAttachments = &colorAttachInfo;
-    renderInfo.pDepthAttachment = &depthAttachInfo;
-
-    cbBegin.beginRendering(renderInfo);
+    cbBegin.end();
 
     // END
     vk::CommandBuffer cbEnd;
-    res = AllocateCommandBuffer(kOrderPriorityMax, cbEnd);
+    res = AllocateCommandBuffer(kOrderPriorityMin, cbEnd);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
+    beginResult = cbEnd.begin(beginInfo);
+    CRVM_LOG_RETURN_IF(beginResult != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
 
     vk::ImageMemoryBarrier2 imgBarrierEnd;
     imgBarrierEnd.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
@@ -428,15 +415,15 @@ vk::Result VulkanSwapchain::InitializedCommandList()
         0u, 1u, 0u, 1u
     };
 
-    imgBarrier.image = GetImage(LastAcquiredImage);
+    imgBarrierEnd.image = GetImage(LastAcquiredImage);
 
     vk::DependencyInfo endDep;
     endDep.imageMemoryBarrierCount = 1;
-    endDep.pImageMemoryBarriers = &imgBarrier;
+    endDep.pImageMemoryBarriers = &imgBarrierEnd;
 
     cbEnd.pipelineBarrier2(endDep);
 
-    cbEnd.endRendering();
+    cbEnd.end();
 
     return vk::Result::eSuccess;
 }
@@ -447,9 +434,9 @@ vk::Result VulkanSwapchain::AllocateCommandBuffer(i32 Priority, vk::CommandBuffe
     info.commandPool = FrameCommandPools[CurrentFrame];
     info.commandBufferCount = 1;
 
-    vk::Device vkDevice = Core->GetDevice();
+    vk::Device device = Core->GetDevice();
     vk::CommandBuffer Cb;
-    vk::Result res = vkDevice.allocateCommandBuffers(&info, &Cb);
+    vk::Result res = device.allocateCommandBuffers(&info, &Cb);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to allocate command buffer.");
     FrameCommandLists[CurrentFrame].CommandBuffers.emplace_back(FrameCommandList::OrderedBuffer{Priority, Cb});
     OutCmdBuf = Cb;
@@ -462,7 +449,7 @@ vk::Result VulkanSwapchain::CompleteFrame(vk::Queue SubmitQueue)
     const eastl::vector<FrameCommandList::OrderedBuffer>& cmdListBuffers = FrameCommandLists[CurrentFrame].CommandBuffers;
 
     eastl::vector<vk::CommandBuffer> cmdBuffers;
-    cmdBuffers.reserve(cmdListBuffers.size());
+    cmdBuffers.resize(cmdListBuffers.size());
     eastl::transform(cmdListBuffers.begin(),
                      cmdListBuffers.end(),
                      cmdBuffers.begin(),
@@ -480,14 +467,14 @@ vk::Result VulkanSwapchain::CompleteFrame(vk::Queue SubmitQueue)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &FrameCompleteSemaphores[LastAcquiredImage];
 
-    vk::Result res = SubmitQueue.submit(submitInfo);
+    vk::Result res = SubmitQueue.submit(submitInfo, InFlightFences[CurrentFrame]);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to submit commands to queue.");
 
     vk::PresentInfoKHR presentInfo;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &FrameCompleteSemaphores[LastAcquiredImage];
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &Swapchain;
+    presentInfo.pSwapchains = Swapchain.Ref();
     presentInfo.pImageIndices = &LastAcquiredImage;
     presentInfo.pResults = &res;
 
@@ -501,5 +488,30 @@ vk::Result VulkanSwapchain::CompleteFrame(vk::Queue SubmitQueue)
 
     CurrentFrame = (CurrentFrame + 1) % kMaxFramesInFlight;
     return vk::Result::eSuccess;
+}
+
+void VulkanSwapchain::FillRenderingInfo(vk::RenderingAttachmentInfo& ColorAttachment,
+                                        vk::RenderingAttachmentInfo& DepthAttachment,
+                                        vk::RenderingInfo& RenderInfo) const
+{
+    ColorAttachment.imageView = GetImageView(LastAcquiredImage);
+    ColorAttachment.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    // TODO : MSAA
+    ColorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+    ColorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+    ColorAttachment.clearValue = vk::ClearColorValue{0.f, 0.f, 0.f, 1.f};
+
+    DepthAttachment.imageView = DepthImages[CurrentFrame]->GetImageView();
+    DepthAttachment.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    DepthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+    DepthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+    DepthAttachment.clearValue = vk::ClearDepthStencilValue{1.f, 0};
+
+
+    RenderInfo.renderArea = vk::Rect2D{{0, 0}, CurrentExtent};
+    RenderInfo.layerCount = 1;
+    RenderInfo.colorAttachmentCount = 1;
+    RenderInfo.pColorAttachments = &ColorAttachment;
+    RenderInfo.pDepthAttachment = &DepthAttachment;
 }
 }

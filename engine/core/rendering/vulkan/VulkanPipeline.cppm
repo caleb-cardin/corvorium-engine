@@ -36,25 +36,28 @@ enum class PipelineType : u8 {
 class VulkanPipeline {
 public:
     VulkanPipeline() = delete;
-    ResultValue<VulkanPipeline> Create(const VulkanGraphicsPipelineCreateParams& Params);
-    ResultValue<VulkanPipeline> Create(const ComputePipelineCreateParams& Params);
-    ResultValue<VulkanPipeline> Create(const RaytracingPipelineCreateParams& Params);
+    static ResultValue<VulkanPipeline> Create(const VulkanGraphicsPipelineCreateParams& Params);
+    static ResultValue<VulkanPipeline> Create(const ComputePipelineCreateParams& Params);
+    static ResultValue<VulkanPipeline> Create(const RaytracingPipelineCreateParams& Params);
 
     VulkanPipeline(const VulkanPipeline& Other) = delete;
+    VulkanPipeline& operator=(const VulkanPipeline& Other) = delete;
+
     VulkanPipeline(VulkanPipeline&& Other) noexcept = default;
-    auto operator=(const VulkanPipeline& Other) -> VulkanPipeline& = delete;
-    auto operator=(VulkanPipeline&& Other) noexcept -> VulkanPipeline& = default;
+    VulkanPipeline& operator=(VulkanPipeline&& Other) noexcept = default;
 
     ~VulkanPipeline();
 
+    [[nodiscard]] PipelineHandle GetHandle() const { return Handle; }
     [[nodiscard]] vk::Pipeline Get() const { return Pipeline; }
     [[nodiscard]] PipelineType GetType() const { return Type; }
 
 private:
+    PipelineHandle Handle;
     PipelineType Type;
-    VulkanCore* Core;
-    vk::Pipeline Pipeline;
-    vk::PipelineLayout Layout;
+    Auto<VulkanCore*> Core;
+    Auto<vk::Pipeline> Pipeline;
+    Auto<vk::PipelineLayout> Layout;
 
     VulkanPipeline(PipelineType InType, VulkanCore* InCore, vk::Pipeline InPipeline, vk::PipelineLayout InLayout);
 };

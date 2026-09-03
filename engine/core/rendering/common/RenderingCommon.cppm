@@ -70,6 +70,7 @@ export struct CRVM_API ShaderBindingEntry {
     u32 Set{};
     u32 Binding{};
     eastl::optional<u32> Count{};
+    eastl::optional<u32> ElementSize{};
     ShaderStageFlags Stage{ShaderStageFlagBits::None};
 };
 

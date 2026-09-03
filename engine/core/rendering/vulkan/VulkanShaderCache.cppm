@@ -25,6 +25,12 @@ import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
 struct VulkanShader {
+    struct DescriptorBinding {
+        u32 Set;
+        u32 Binding;
+        eastl::optional<u32> Size;
+    };
+
     struct EntryPoint {
         eastl::string Name;
         ShaderStageFlagBits Stage;
@@ -35,6 +41,7 @@ struct VulkanShader {
     eastl::optional<eastl::vector<Rendering::VertexAttributeEntry>> VertexAttributes{};
     vk::ShaderModule Module{nullptr};
     vk::PipelineLayout Layout{nullptr};
+    eastl::string_hash_map<DescriptorBinding> BindingMap{};
     eastl::vector<vk::DescriptorSetLayout> DescriptorLayouts{};
     eastl::vector<vk::PushConstantRange> PushConstantRanges{};
 };
@@ -105,8 +112,8 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
     if (FileToHandleMap.contains(ShaderPath.c_str()))
     {
         ShaderModuleHandle handle = FileToHandleMap[ShaderPath.c_str()];
-        CRVM_ASSERT(HandleToShaderMap.contains(handle));
-        return &HandleToShaderMap[handle];
+        CRVM_ASSERT(handle);
+        return GetShader(handle);
     }
 
     if (!CompileContext)

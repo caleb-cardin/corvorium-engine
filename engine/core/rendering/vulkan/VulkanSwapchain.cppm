@@ -57,17 +57,16 @@ class VulkanSwapchain {
     };
 
 public:
-    inline static constexpr i32 kOrderPriorityMin = std::numeric_limits<i32>::min();
-    inline static constexpr i32 kOrderPriorityMax = std::numeric_limits<i32>::max();
+    inline static constexpr i32 kOrderPriorityMax = std::numeric_limits<i32>::min();
+    inline static constexpr i32 kOrderPriorityMin = std::numeric_limits<i32>::max();
 
     static VulkanSwapchain CreateUninitializedSwapchain(vk::SurfaceKHR FromSurface) { return VulkanSwapchain{FromSurface}; }
     static VulkanSwapchain CreateInitializedSwapchain(const VulkanSwapchainCreateParams& Params) { return VulkanSwapchain{Params}; }
 
     VulkanSwapchain(const VulkanSwapchain&) = delete;
-    VulkanSwapchain(VulkanSwapchain&&) noexcept = default;
+    VulkanSwapchain(VulkanSwapchain&& Other) noexcept = default;
     VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
-    VulkanSwapchain& operator=(VulkanSwapchain&&) noexcept = default;
-    VulkanSwapchain() = delete;
+    VulkanSwapchain& operator=(VulkanSwapchain&& Other) noexcept = default;
     ~VulkanSwapchain();
 
     [[nodiscard]] bool Initialize(const VulkanSwapchainCreateParams& Params);
@@ -79,8 +78,14 @@ public:
     [[nodiscard]] vk::Image GetImage(u32 Index) const { return Images[Index]; }
     [[nodiscard]] vk::ImageView GetImageView(u32 Index) const { return ImageViews[Index]; }
 
-    [[nodiscard]] vk::Image GetDepthImage() { return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImage() : nullptr; }
-    [[nodiscard]] vk::ImageView GetDepthImageView() { return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImageView() : nullptr; }
+    [[nodiscard]] vk::Image GetDepthImage() const { return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImage() : nullptr; }
+
+    [[nodiscard]] vk::ImageView GetDepthImageView() const
+    {
+        return DepthImages[CurrentFrame] ? DepthImages[CurrentFrame]->GetImageView() : nullptr;
+    }
+
+    [[nodiscard]] vk::Extent2D GetExtent() const { return CurrentExtent; }
 
     void GetFramebufferSize(u32& Width, u32& Height) const;
 
@@ -94,20 +99,24 @@ public:
     [[nodiscard]] vk::Result AcquireImage();
     [[nodiscard]] vk::Result Reset();
 
-    [[nodiscard]] vk::Result InitializedCommandList();
+    [[nodiscard]] vk::Result InitializeCommandList();
     [[nodiscard]] vk::Result AllocateCommandBuffer(i32 Priority, vk::CommandBuffer& OutCmdBuf);
     [[nodiscard]] vk::Result CompleteFrame(vk::Queue SubmitQueue);
 
-private:
-    VulkanCore* Core{nullptr};
-    OS::Window* Window{nullptr};
+    [[nodiscard]] void FillRenderingInfo(vk::RenderingAttachmentInfo& ColorAttachment,
+                                         vk::RenderingAttachmentInfo& DepthAttachment,
+                                         vk::RenderingInfo& RenderInfo) const;
 
-    vk::SwapchainKHR Swapchain{nullptr};
-    vk::SurfaceKHR Surface{nullptr};
+private:
+    Auto<VulkanCore*> Core{nullptr};
+    Auto<OS::Window*> Window{nullptr};
+
+    Auto<vk::SwapchainKHR> Swapchain{nullptr};
+    Auto<vk::SurfaceKHR> Surface{nullptr};
     eastl::vector<vk::Image> Images{};
     eastl::vector<vk::ImageView> ImageViews{};
 
-    eastl::array<eastl::unique_ptr<VulkanImage>, kMaxFramesInFlight> DepthImages;
+    eastl::array<eastl::unique_ptr<VulkanImage>, kMaxFramesInFlight> DepthImages{};
 
     QueueFamilyIndices QueueFamilyIndices;
 
@@ -125,6 +134,7 @@ private:
     bool bIsOutOfDate{false};
     bool bIsMinimized{false};
 
+    VulkanSwapchain() = default;
     explicit VulkanSwapchain(const VulkanSwapchainCreateParams& Params);
     explicit VulkanSwapchain(vk::SurfaceKHR InSurface);
 

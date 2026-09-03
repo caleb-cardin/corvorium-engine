@@ -31,6 +31,11 @@ public:
         return HandleType(NextHandle.fetch_add(1ull, eastl::internal::memory_order_relaxed_s{}));
     }
 
+    operator bool() const
+    {
+        return Handle != kInvalidHandle;
+    }
+
     bool operator==(const HandleType& Other) const { return Handle == Other.Handle; }
 
     bool operator==(const Handle_t Other) const { return Handle == Other; }
@@ -80,4 +85,54 @@ export struct MultiHandleHash {
 
 template<typename T>
 eastl::atomic<u64> HandleType<T>::NextHandle{0};
+
+
+export template<typename P>
+concept PtrType = requires(P Pointer) {
+    { Pointer == nullptr } -> std::same_as<bool>;
+    { P{nullptr} };
+};
+
+export template<PtrType Ptr>
+class Auto {
+public:
+    Auto() = default;
+    ~Auto() = default;
+
+    Auto(Ptr P) : Pointer{P} {}
+
+    Auto(const Auto& Other) = default;
+    Auto& operator=(const Auto& Other) = default;
+
+    Auto(Auto&& Other) noexcept : Pointer{Other.Pointer}
+    {
+        Other.Pointer = nullptr;
+    }
+
+    Auto& operator=(Auto&& Other) noexcept
+    {
+        Pointer = Other.Pointer;
+        Other.Pointer = nullptr;
+        return *this;
+    }
+
+    Ptr operator->() { return Pointer; }
+    Ptr operator->() const { return Pointer; }
+
+    inline operator Ptr() const { return Pointer; }
+
+    inline operator bool() const { return Pointer; }
+
+    template<typename U = Ptr> requires requires { typename U::NativeType; }
+    inline typename U::NativeType Native() const
+    {
+        return static_cast<typename U::NativeType>(Pointer);
+    }
+
+    Ptr* Ref() { return &Pointer; }
+    const Ptr* Ref() const { return &Pointer; }
+
+private:
+    Ptr Pointer{nullptr};
+};
 }

@@ -3,6 +3,7 @@ module;
 
 export module Common;
 export import :Build;
+export import :Debug;
 export import :Flags;
 export import :Result;
 export import :TypeDefs;

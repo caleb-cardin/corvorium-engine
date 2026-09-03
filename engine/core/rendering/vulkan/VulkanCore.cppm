@@ -35,7 +35,7 @@ public:
     [[nodiscard]] RenderError EndFrame(OS::WindowHandle Window) override;
 
     [[nodiscard]] ResultValue<ShaderModuleHandle> CreateShaderModule(const eastl::string& Name) override;
-    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(ShaderModuleHandle Shader) override;
+    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(const GraphicsPipelineCreateParams& Params) override;
 
     [[nodiscard]] vk::Instance GetInstance() const { return Instance; }
     [[nodiscard]] vk::PhysicalDevice GetPhysicalDevice() const { return PhysicalDevice; }
@@ -46,7 +46,7 @@ public:
 
     static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
 
-    [[nodiscard]] vk::Pipeline FindPipeline(PipelineHandle Pipeline);
+    [[nodiscard]] const VulkanPipeline* FindPipeline(PipelineHandle Pipeline);
 
 private:
     FileSystem::IFileProvider* FileProvider{nullptr};

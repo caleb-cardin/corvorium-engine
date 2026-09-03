@@ -16,6 +16,13 @@ import :Types;
 
 namespace Corvorium::Rendering::Vulkan {
 namespace {
+// Vertex
+constexpr vk::PipelineVertexInputStateCreateInfo kDefaultVertexInput{
+    {},
+    0, nullptr,
+    0, nullptr
+};
+
 // Input assembly
 constexpr vk::PipelineInputAssemblyStateCreateInfo kDefaultIAState{};
 constexpr vk::PipelineInputAssemblyStateCreateInfo kTriangleListIAState{
@@ -36,13 +43,18 @@ constexpr vk::PipelineViewportStateCreateInfo kDefaultVPState{
 };
 
 // Rasterization
-constexpr vk::PipelineRasterizationStateCreateInfo kDefaultRasterState{};
-constexpr vk::PipelineRasterizationStateCreateInfo kBackFaceCullRasterState{
+constexpr vk::PipelineRasterizationStateCreateInfo kDefaultRasterState{
     {},
     false,
     false,
     vk::PolygonMode::eFill,
-    vk::CullModeFlagBits::eBack
+    vk::CullModeFlagBits::eNone,
+    vk::FrontFace::eCounterClockwise,
+    false,
+    0.f,
+    0.f,
+    0.f,
+    1.f
 };
 
 // MSAA
@@ -64,7 +76,16 @@ constexpr vk::PipelineDepthStencilStateCreateInfo kTransparentDepthStencilState{
 };
 
 // Color blend state
-constexpr vk::PipelineColorBlendAttachmentState kDefaultColorBlendAttachment{};
+constexpr vk::PipelineColorBlendAttachmentState kDefaultColorBlendAttachment{
+    false,
+vk::BlendFactor::eZero,
+    vk::BlendFactor::eZero,
+    vk::BlendOp::eAdd,
+vk::BlendFactor::eZero,
+    vk::BlendFactor::eZero,
+    vk::BlendOp::eAdd,
+vk::FlagTraits<vk::ColorComponentFlagBits>::allFlags
+};
 constexpr vk::PipelineColorBlendAttachmentState kAlphaColorBlendAttachment{
     true,
     vk::BlendFactor::eSrcAlpha,
@@ -106,18 +127,15 @@ public:
     };
 
     [[nodiscard]] bool IsComplete() const;
-    [[nodiscard]] const vk::PipelineRenderingCreateInfo* GetRenderingCreateInfo() const { return RenderingCreateInfo; }
+
     GraphicsPipelineDescBuilder& SetRenderingCreateInfo(vk::PipelineRenderingCreateInfo* Info);
 
-    [[nodiscard]] const eastl::vector<vk::PipelineShaderStageCreateInfo>& GetShaderStages() const { return ShaderStages; }
     GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, vk::ShaderStageFlagBits Stage, const char* EntryPoint);
     GraphicsPipelineDescBuilder& AddSingleShader(vk::ShaderModule Shader, const ShaderStageInfo& StageInfo);
     GraphicsPipelineDescBuilder& AddMultiShader(vk::ShaderModule Shader, eastl::span<ShaderStageInfo> StageInfos);
 
-    [[nodiscard]] vk::PipelineLayout GetLayout() const { return Layout; }
     GraphicsPipelineDescBuilder& SetLayout(vk::PipelineLayout InLayout);
 
-    [[nodiscard]] const eastl::vector<ColorBlendType>& GetColorBlends() const { return ColorBlends; }
     GraphicsPipelineDescBuilder& SetColorBlends(ColorBlendType ColorBlend, u32 Count);
 
     GraphicsPipelineDescBuilder& SetPrimitiveType(PrimitiveType InType)
@@ -132,22 +150,16 @@ public:
         return *this;
     }
 
-    GraphicsPipelineDescBuilder& SetBackfaceCullEnabled(bool Enabled)
-    {
-        BackfaceCullEnabled = Enabled;
-        return *this;
-    }
-
     [[nodiscard]] ResultValue<vk::GraphicsPipelineCreateInfo> Build() const;
 
 private:
     vk::PipelineRenderingCreateInfo* RenderingCreateInfo{nullptr};
     eastl::vector<vk::PipelineShaderStageCreateInfo> ShaderStages{};
     vk::PipelineLayout Layout{nullptr};
-    eastl::vector<ColorBlendType> ColorBlends{};
+    eastl::vector<vk::PipelineColorBlendAttachmentState> BlendAttachments;
+    vk::PipelineColorBlendStateCreateInfo BlendInfo{};
     PrimitiveType Primitive{PrimitiveType::Default};
     DepthTestType DepthTest{DepthTestType::Default};
-    bool BackfaceCullEnabled{false};
 };
 
 bool GraphicsPipelineDescBuilder::IsComplete() const
@@ -199,7 +211,33 @@ GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetLayout(vk::Pipeline
 
 GraphicsPipelineDescBuilder& GraphicsPipelineDescBuilder::SetColorBlends(ColorBlendType ColorBlend, u32 Count)
 {
-    ColorBlends.assign(Count, ColorBlend);
+    BlendAttachments.resize(Count);
+    for (u32 i = 0; i < Count; ++i)
+    {
+        switch (ColorBlend)
+        {
+        case ColorBlendType::None:
+        {
+            BlendAttachments[i] = kDefaultColorBlendAttachment;
+            break;
+        }
+        case ColorBlendType::Alpha:
+        {
+            BlendAttachments[i] = kAlphaColorBlendAttachment;
+            break;
+        }
+        case ColorBlendType::Additive:
+        {
+            BlendAttachments[i] = kAdditiveColorBlendAttachment;
+            break;
+        }
+        }
+    }
+
+    BlendInfo.attachmentCount = Count;
+    BlendInfo.pAttachments = BlendAttachments.data();
+    BlendInfo.blendConstants.fill(1.f);
+
     return *this;
 }
 
@@ -213,11 +251,12 @@ ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::Build()
 
     vk::GraphicsPipelineCreateInfo info;
 
-    info.pNext = GetRenderingCreateInfo();
+    info.pNext = RenderingCreateInfo;
 
-    const auto& stages = GetShaderStages();
     info.stageCount = static_cast<u32>(ShaderStages.size());
-    info.pStages = stages.data();
+    info.pStages = ShaderStages.data();
+
+    info.pVertexInputState = &kDefaultVertexInput;
 
     switch (Primitive)
     {
@@ -252,38 +291,12 @@ ResultValue<vk::GraphicsPipelineCreateInfo> GraphicsPipelineDescBuilder::Build()
 
     info.pTessellationState = &kDefaultTessellationState;
     info.pViewportState = &kDefaultVPState;
-    info.pRasterizationState = BackfaceCullEnabled ? &kBackFaceCullRasterState : &kDefaultRasterState;
+    info.pRasterizationState = &kDefaultRasterState;
     info.pMultisampleState = &kDefaultMSAAState;
     info.pDynamicState = &kDefaultDynamicState;
-    vk::PipelineColorBlendStateCreateInfo BlendState;
-    BlendState.blendConstants.fill(1.f);
-    eastl::vector<vk::PipelineColorBlendAttachmentState> blendAttachments;
-    const auto& colorBlends = GetColorBlends();
-    blendAttachments.resize(colorBlends.size());
-    for (u32 i = 0; const auto& Blend: colorBlends)
-    {
-        switch (Blend)
-        {
-        case ColorBlendType::None:
-        {
-            blendAttachments[i] = kDefaultColorBlendAttachment;
-            break;
-        }
-        case ColorBlendType::Alpha:
-        {
-            blendAttachments[i] = kAlphaColorBlendAttachment;
-            break;
-        }
-        case ColorBlendType::Additive:
-        {
-            blendAttachments[i] = kAdditiveColorBlendAttachment;
-            break;
-        }
-        }
-        ++i;
-    }
+    info.pColorBlendState = &BlendInfo;
 
-    info.layout = GetLayout();
+    info.layout = Layout;
     return info;
 }
 }

@@ -28,7 +28,7 @@ ResultValue<ShaderProgram> CompileContext::Compile(const eastl::string& File) co
                        ShaderCompilerLogger,
                        kError,
                        "Failed to load shader module: {}",
-                       diagnostics->getBufferPointer());
+                       reinterpret_cast<const char*>(diagnostics->getBufferPointer()));
 
     i32 entryPointCount = module->getDefinedEntryPointCount();
     eastl::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints{};
@@ -59,7 +59,7 @@ ResultValue<ShaderProgram> CompileContext::Compile(const eastl::string& File) co
                        ShaderCompilerLogger,
                        kError,
                        "Failed to compose shader: {}",
-                       diagnostics->getBufferPointer());
+                       reinterpret_cast<const char*>(diagnostics->getBufferPointer()));
 
     Slang::ComPtr<slang::IComponentType> linkedProg{nullptr};
     res = composite->link(linkedProg.writeRef(), diagnostics.writeRef());
@@ -68,7 +68,7 @@ ResultValue<ShaderProgram> CompileContext::Compile(const eastl::string& File) co
                        ShaderCompilerLogger,
                        kError,
                        "Failed to link shader program: {}",
-                       diagnostics->getBufferPointer());
+                       reinterpret_cast<const char*>(diagnostics->getBufferPointer()));
 
     Slang::ComPtr<slang::IBlob> byteCodeBlob{nullptr};
     res = linkedProg->getTargetCode(0, byteCodeBlob.writeRef(), diagnostics.writeRef());
@@ -77,7 +77,7 @@ ResultValue<ShaderProgram> CompileContext::Compile(const eastl::string& File) co
                        ShaderCompilerLogger,
                        kError,
                        "Failed to get shader byte code: {}",
-                       diagnostics->getBufferPointer());
+                       reinterpret_cast<const char*>(diagnostics->getBufferPointer()));
 
     ShaderProgram shader;
     shader.ByteCode.resize(byteCodeBlob->getBufferSize());
@@ -122,6 +122,15 @@ static void ProcessParameterReflection(ShaderReflection& Reflection,
         bindingEntry.Binding = VariableLayout->getBindingIndex();
         SlangInt bindingCount = typeLayout->getBindingRangeBindingCount(0);
         bindingEntry.Count = bindingCount == SLANG_UNBOUNDED_SIZE ? eastl::optional<u32>{} : static_cast<u32>(bindingCount);
+
+        if (bindingEntry.Type == ShaderResourceType::StorageBuffer || bindingEntry.Type == ShaderResourceType::UniformBuffer)
+        {
+            if (slang::TypeLayoutReflection* elementLayout = typeLayout->getElementTypeLayout())
+            {
+                bindingEntry.ElementSize.emplace(elementLayout->getSize());
+            }
+        }
+
         LeafVariables.insert(VariableLayout->getName(), &bindingEntry);
     }
 }
@@ -165,7 +174,7 @@ static void ProcessShaderStageFlags(eastl::string_hash_map<Rendering::ShaderBind
         else
         {
             const char* name = VariableLayout->getName();
-            if (BindingMap.contains(name))
+            if (name && BindingMap.contains(name))
             {
                 BindingMap[name]->Stage |= Stage;
             }
@@ -225,7 +234,7 @@ ResultValue<ShaderReflection> CompileContext::Reflect(Slang::ComPtr<slang::IComp
                        ShaderCompilerLogger,
                        kError,
                        "Failed to get shader layout: {}",
-                       diagnostics->getBufferPointer());
+                       reinterpret_cast<const char*>(diagnostics->getBufferPointer()));
 
     u32 parameterCount = programLayout->getParameterCount();
 
@@ -263,6 +272,7 @@ ResultValue<ShaderReflection> CompileContext::Reflect(Slang::ComPtr<slang::IComp
             ShaderReflection::EntryPoint& newEntryPoint = Reflect.EntryPoints.emplace_back();
             slang::EntryPointReflection* entryPoint = programLayout->getEntryPointByIndex(i);
             u32 entryParameterCount = entryPoint->getParameterCount();
+            newEntryPoint.Name = entryPoint->getName();
             newEntryPoint.Stage = FromSlangType(entryPoint->getStage());
 
             // Loop through params

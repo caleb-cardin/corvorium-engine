@@ -29,29 +29,32 @@ ResultValue<VulkanPipeline> VulkanPipeline::Create(const VulkanGraphicsPipelineC
         });
     }
 
-    const Util::SurfaceInfo& surfaceInfo = Core->GetSurfaceInfo();
+    const Util::SurfaceInfo& surfaceInfo = Params.Core->GetSurfaceInfo();
     vk::PipelineRenderingCreateInfo renderInfo;
     renderInfo.colorAttachmentCount = 1;
     renderInfo.pColorAttachmentFormats = &surfaceInfo.ColorFormat.format;
     renderInfo.depthAttachmentFormat = surfaceInfo.DepthStencilFormat;
     renderInfo.stencilAttachmentFormat = surfaceInfo.DepthStencilFormat;
 
-    ResultValue<vk::GraphicsPipelineCreateInfo> result = GraphicsPipelineDescBuilder()
-            .SetRenderingCreateInfo(&renderInfo)
+    GraphicsPipelineDescBuilder builder{}; // builder needs to stay in scope as
+    builder.SetRenderingCreateInfo(&renderInfo)
             .AddMultiShader(shader->Module, StageInfos)
             .SetLayout(shader->Layout)
             .SetColorBlends(Params.External.ColorBlend, 1)
             .SetPrimitiveType(Params.External.Primitive)
-            .SetDepthTestType(Params.External.DepthTest)
-            .SetBackfaceCullEnabled(Params.External.BackfaceCullEnabled)
-            .Build();
+            .SetDepthTestType(Params.External.DepthTest);
 
+    ResultValue<vk::GraphicsPipelineCreateInfo> result = builder.Build();
     CRVM_LOG_RETURN_IF(!result.has_value(), ResultError(RenderError::InvalidParameters), VulkanLogger, kError, "Failed to create pipeline");
 
-    auto res = Core->GetDevice().createGraphicsPipeline(Params.PipelineCache, result.value());
-    CRVM_LOG_RETURN_IF(!res.has_value(), ResultError(RenderError::InitializationFailed), VulkanLogger, kError, "Failed to create pipeline");
+    auto pipelineResult = Params.Core->GetDevice().createGraphicsPipeline(Params.PipelineCache, result.value());
+    CRVM_LOG_RETURN_IF(!pipelineResult.has_value(),
+                       ResultError(RenderError::InitializationFailed),
+                       VulkanLogger,
+                       kError,
+                       "Failed to create pipeline");
 
-    return VulkanPipeline(PipelineType::Graphics, Params.Core, res.value, shader->Layout);
+    return VulkanPipeline(PipelineType::Graphics, Params.Core, pipelineResult.value, shader->Layout);
 }
 
 
@@ -68,14 +71,14 @@ ResultValue<VulkanPipeline> VulkanPipeline::Create(const RaytracingPipelineCreat
     return ResultError(RenderError::InternalError);
 }
 
-
 VulkanPipeline::~VulkanPipeline()
 {
-    Core->GetDevice().destroyPipeline(Pipeline);
+    if (Core && Pipeline) {Core->GetDevice().destroyPipeline(Pipeline);}
 }
 
 VulkanPipeline::VulkanPipeline(PipelineType InType, VulkanCore* InCore, vk::Pipeline InPipeline, vk::PipelineLayout InLayout)
-    : Type{InType}
+    : Handle{PipelineHandle::New()}
+    , Type{InType}
     , Core{InCore}
     , Pipeline{InPipeline}
     , Layout{InLayout}
