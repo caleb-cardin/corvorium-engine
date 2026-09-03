@@ -5,7 +5,8 @@ module;
 #include "EASTL/string.h"
 #include "EASTL/vector.h"
 export module OS:FileProvider;
-import Common;
+import TypeDefs;
+import ResultValue;
 
 namespace Corvorium::FileSystem {
 export enum class FileError : u32 {

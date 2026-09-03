@@ -11,6 +11,7 @@ module VFS:MountTable;
 import :BackendInterface;
 import :Types;
 import OS;
+import Logging;
 
 using namespace Corvorium::FileSystem;
 

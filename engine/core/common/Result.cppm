@@ -2,7 +2,7 @@
 module;
 
 #include <expected>
-export module Common:Result;
+export module ResultValue;
 export namespace Corvorium::Error {
 template<typename V, typename E>
 using ResultValueType = std::expected<V, E>;

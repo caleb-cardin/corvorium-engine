@@ -2,7 +2,6 @@
 module;
 #include "EASTL/vector.h"
 export module ShaderCompiler:ShaderProgram;
-import Common;
 import :Types;
 
 namespace Corvorium::ShaderCompiler {

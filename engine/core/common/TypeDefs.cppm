@@ -5,7 +5,7 @@ module;
 #include <source_location>
 #include <type_traits>
 
-export module Common:TypeDefs;
+export module TypeDefs;
 
 export namespace Corvorium {
 using u8 = uint8_t;

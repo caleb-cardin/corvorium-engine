@@ -2,6 +2,6 @@
 module;
 
 module ShaderCompiler:ShaderProgramImpl;
-import Common;
+
 
 namespace Corvorium::ShaderCompiler {}

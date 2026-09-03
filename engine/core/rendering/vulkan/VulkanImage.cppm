@@ -5,7 +5,7 @@ module;
 #include "vulkan/vulkan.hpp"
 #include "vma/vk_mem_alloc.h"
 module Rendering:VulkanImage;
-import Common;
+import CommonTypes;
 import :Types;
 
 namespace Corvorium::Rendering::Vulkan {

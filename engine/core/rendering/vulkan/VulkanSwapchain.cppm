@@ -12,7 +12,6 @@ module;
 
 module Rendering:VulkanSwapchain;
 import OS;
-import Common;
 import :VulkanImage;
 import :VulkanUtils;
 import :Types;

@@ -11,7 +11,7 @@ module;
 
 #include "common/Logging.hpp"
 export module Application;
-import Common;
+import Logging;
 import OS;
 import Rendering;
 import VFS;

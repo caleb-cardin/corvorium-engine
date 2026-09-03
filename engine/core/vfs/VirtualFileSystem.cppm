@@ -1,12 +1,11 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
-#include "common/Logging.hpp"
 
 #include "EASTL/unique_ptr.h"
 #include "EASTL/string.h"
 export module VFS:VirtualFileSystem;
-import Common;
+import Logging;
 import OS;
 import :Types;
 
@@ -17,7 +16,6 @@ class MountTable;
 class IVFSBackend;
 
 Log::Logger VfsLogger{"VFSLog"};
-
 
 export class CRVM_API VirtualFileSystem : public IFileProvider {
 public:

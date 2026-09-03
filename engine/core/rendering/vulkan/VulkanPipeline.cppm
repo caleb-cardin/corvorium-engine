@@ -8,7 +8,7 @@ module;
 module Rendering:VulkanPipeline;
 import :Types;
 import :VulkanShaderCache;
-import Common;
+import CommonTypes;
 
 namespace Corvorium::Rendering::Vulkan {
 class VulkanCore;

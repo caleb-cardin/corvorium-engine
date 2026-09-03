@@ -8,7 +8,9 @@ module;
 #include "vulkan/vulkan.hpp"
 #include "GLFW/glfw3.h"
 module Rendering:VulkanUtils;
-import Common;
+import Logging;
+import Debug;
+import Flags;
 import RenderingCommon;
 import OS;
 

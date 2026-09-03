@@ -6,7 +6,8 @@ module;
 #include "EASTL/string.h"
 export module Rendering:Types;
 import RenderingCommon;
-import Common;
+import ResultValue;
+import CommonTypes;
 
 namespace Corvorium::Rendering {
 export enum class RenderError {

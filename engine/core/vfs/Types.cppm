@@ -7,7 +7,7 @@ module;
 #include "EASTL/vector.h"
 #include "EASTL/atomic.h"
 export module VFS:Types;
-import Common;
+import Flags;
 import OS;
 
 using namespace Corvorium::FileSystem;

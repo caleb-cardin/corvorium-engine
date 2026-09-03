@@ -1,7 +1,7 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
-export module Common:Build;
+export module Build;
 
 export namespace Corvorium::Build {
 enum class BuildMode {

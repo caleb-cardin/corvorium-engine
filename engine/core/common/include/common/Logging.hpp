@@ -6,13 +6,13 @@
 #define CRVM_LOG(_logger, _level, _msg, ...)                                                        \
 do {                                                                                                \
     Detail::SourceLocation _loc = Detail::SourceLocation::current();                                \
-    if constexpr (_level & LogLevelBits::Info)                                                      \
+    if constexpr (_level == LogLevelBits::Info)                                                      \
         _logger->info(_msg " @ {}:{}" __VA_OPT__(,) __VA_ARGS__, _loc.file_name(), _loc.line());    \
-    if constexpr (_level & LogLevelBits::Warning)                                                   \
+    if constexpr (_level == LogLevelBits::Warning)                                                   \
         _logger->warn(_msg " @ {}:{}" __VA_OPT__(,) __VA_ARGS__, _loc.file_name(), _loc.line());    \
-    if constexpr (_level & LogLevelBits::Error)                                                     \
+    if constexpr (_level == LogLevelBits::Error)                                                     \
         _logger->error(_msg " @ {}:{}" __VA_OPT__(,) __VA_ARGS__, _loc.file_name(), _loc.line());   \
-    if constexpr (_level & LogLevelBits::Critical)                                                  \
+    if constexpr (_level == LogLevelBits::Critical)                                                  \
         _logger->critical(_msg " @ {}:{}" __VA_OPT__(,) __VA_ARGS__, _loc.file_name(), _loc.line());\
 } while (0)
 

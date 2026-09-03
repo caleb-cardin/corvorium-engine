@@ -10,7 +10,6 @@ module;
 #include "EASTL/span.h"
 
 module Rendering:VulkanPipelineUtils;
-import Common;
 import :VulkanUtils;
 import :Types;
 

@@ -9,8 +9,9 @@ module;
 
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
-module Common:LoggingImpl;
-import :Logging;
+module Logging:Impl;
+import Logging;
+import Build;
 
 namespace Corvorium::Log {
 class Logger::Impl {

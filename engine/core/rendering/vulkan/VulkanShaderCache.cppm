@@ -10,6 +10,7 @@ module;
 #include "EASTL/span.h"
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
+#include "EASTL/vector_map.h"
 
 #include "vulkan/vulkan.hpp"
 module Rendering:VulkanShaderCache;
@@ -25,6 +26,12 @@ import :VulkanUtils;
 
 namespace Corvorium::Rendering::Vulkan {
 struct VulkanShader {
+    VulkanShader() = default;
+    VulkanShader(const VulkanShader& Other) = delete;
+    VulkanShader(VulkanShader&& Other) noexcept = default;
+    auto operator=(const VulkanShader& Other) -> VulkanShader& = delete;
+    auto operator=(VulkanShader&& Other) noexcept -> VulkanShader& = default;
+
     struct DescriptorBinding {
         u32 Set;
         u32 Binding;
@@ -36,11 +43,12 @@ struct VulkanShader {
         ShaderStageFlagBits Stage;
     };
 
-    ShaderModuleHandle Handle;
+
+    ShaderModuleHandle Handle{};
     eastl::vector<EntryPoint> EntryPoints{};
     eastl::optional<eastl::vector<Rendering::VertexAttributeEntry>> VertexAttributes{};
-    vk::ShaderModule Module{nullptr};
-    vk::PipelineLayout Layout{nullptr};
+    Auto<vk::ShaderModule> Module{nullptr};
+    Auto<vk::PipelineLayout> Layout{nullptr};
     eastl::string_hash_map<DescriptorBinding> BindingMap{};
     eastl::vector<vk::DescriptorSetLayout> DescriptorLayouts{};
     eastl::vector<vk::PushConstantRange> PushConstantRanges{};
@@ -71,7 +79,7 @@ private:
     eastl::unique_ptr<ShaderCompiler::CompileContext> DefaultCompileContext{nullptr};
 
     eastl::string_hash_map<ShaderModuleHandle> FileToHandleMap{};
-    eastl::hash_map<ShaderModuleHandle, VulkanShader, HandleHash> HandleToShaderMap{};
+    eastl::vector_map<ShaderModuleHandle, VulkanShader> HandleToShaderMap{};
 
     void CreateDescriptorData(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
                               eastl::vector<vk::DescriptorSetLayout>& OutLayouts);
@@ -183,9 +191,8 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
     }
     shader.Layout = pipelineLayoutResult.value;
 
-    const auto [it, success] = HandleToShaderMap.emplace(shader.Handle, eastl::move(shader));
-    CRVM_ASSERT(success);
-    return &HandleToShaderMap[it->first];
+    const auto& shaderElement = HandleToShaderMap.emplace_back_unsorted(shader.Handle, eastl::move(shader));
+    return &shaderElement.second;
 }
 
 const VulkanShader* VulkanShaderCache::GetShader(ShaderModuleHandle Shader)

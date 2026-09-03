@@ -5,7 +5,8 @@ module;
 
 #include "GLFW/glfw3.h"
 export module OS:Window;
-import Common;
+import TypeDefs;
+import CommonTypes;
 
 namespace Corvorium::OS {
 class WindowManager;

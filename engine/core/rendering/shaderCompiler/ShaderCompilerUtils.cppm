@@ -2,7 +2,7 @@
 module;
 
 export module ShaderCompiler:Util;
-import Common;
+import Logging;
 
 namespace Corvorium::ShaderCompiler {
 Log::Logger ShaderCompilerLogger{"Shader Compiler"};

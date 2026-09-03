@@ -6,8 +6,8 @@ module;
 #include "EASTL/sort.h"
 #include "EASTL/vector.h"
 
-export module Common:Types;
-import :TypeDefs;
+export module CommonTypes;
+export import TypeDefs;
 
 namespace Corvorium {
 export template<typename T>

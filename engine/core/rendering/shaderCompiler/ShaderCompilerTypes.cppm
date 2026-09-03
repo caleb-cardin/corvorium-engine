@@ -4,7 +4,8 @@ module;
 #include "EASTL/string.h"
 #include "EASTL/vector.h"
 export module ShaderCompiler:Types;
-import Common;
+import ResultValue;
+import TypeDefs;
 import RenderingCommon;
 
 namespace Corvorium::ShaderCompiler {

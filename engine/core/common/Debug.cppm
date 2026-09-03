@@ -2,8 +2,8 @@
 module;
 #include "CorvoriumApi.h"
 #include "include/common/DebugBreak.hpp"
-export module Common:Debug;
-import :Build;
+export module Debug;
+import Build;
 export namespace Corvorium {
 CRVM_API void DebugBreak()
 {

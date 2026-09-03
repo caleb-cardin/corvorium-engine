@@ -16,6 +16,7 @@ import :CommandBufferImpl;
 import :VulkanCommandBuffer;
 import :VulkanSwapchain;
 import :VulkanUtils;
+import Build;
 
 namespace Corvorium::Rendering::Vulkan {
 VulkanCore::~VulkanCore()
@@ -57,13 +58,7 @@ RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProv
         return RenderError::InitializationFailed;
     }
 
-    auto [scIter, success] = Swapchains.try_emplace(MainWindow->GetHandle(), VulkanSwapchain::CreateUninitializedSwapchain(MainSurface));
-    if (!success)
-    {
-        Instance.destroySurfaceKHR(MainSurface);
-        Teardown();
-        return RenderError::InitializationFailed;
-    }
+    auto& scElement = Swapchains.emplace_back_unsorted(MainWindow->GetHandle(), VulkanSwapchain::CreateUninitializedSwapchain(MainSurface));
 
     if (!InitDevice())
     {
@@ -73,7 +68,7 @@ RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProv
 
     ShaderCache = eastl::make_unique<VulkanShaderCache>(Device, FileProvider);
 
-    bool swapchainInitialized = scIter->second.Initialize(VulkanSwapchainCreateParams{
+    bool swapchainInitialized = scElement.second.Initialize(VulkanSwapchainCreateParams{
         .Instance = Instance,
         .Core = this,
         .Window = MainWindow,
@@ -106,11 +101,7 @@ RenderError VulkanCore::InitializeWindow(OS::Window* Window)
         .PresentQueue = PresentQueueFamily
     };
 
-    auto [_, success] = Swapchains.try_emplace(Window->GetHandle(), VulkanSwapchain::CreateInitializedSwapchain(params));
-    if (!success)
-    {
-        return RenderError::InitializationFailed;
-    }
+    Swapchains.emplace_back_unsorted(Window->GetHandle(), VulkanSwapchain::CreateInitializedSwapchain(params));
 
     return RenderError::Success;
 }

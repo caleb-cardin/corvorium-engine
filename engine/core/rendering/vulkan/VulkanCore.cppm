@@ -2,6 +2,7 @@
 module;
 
 #include "EASTL/hash_map.h"
+#include "EASTL/vector_map.h"
 #include "EASTL/string.h"
 #include "vulkan/vulkan.hpp"
 #include "vma/vk_mem_alloc.h"
@@ -66,7 +67,7 @@ private:
     u32 PresentQueueFamily{};
 
     Util::SurfaceInfo SurfaceInfo{};
-    eastl::hash_map<OS::WindowHandle, VulkanSwapchain, HandleHash> Swapchains{};
+    eastl::vector_map<OS::WindowHandle, VulkanSwapchain> Swapchains{};
 
     eastl::unique_ptr<VulkanShaderCache> ShaderCache{};
 

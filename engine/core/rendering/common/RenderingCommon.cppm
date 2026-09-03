@@ -6,7 +6,8 @@ module;
 #include "EASTL/optional.h"
 #include "EASTL/string.h"
 export module RenderingCommon;
-import Common;
+import CommonTypes;
+import Flags;
 
 namespace Corvorium::Rendering {
 export enum class ShaderStageFlagBits : u32 {

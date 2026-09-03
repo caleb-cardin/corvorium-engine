@@ -11,11 +11,11 @@ module;
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
 
-export module Common:Logging;
-import :TypeDefs;
-import :Build;
-import :Debug;
-import :Flags;
+export module Logging;
+export import TypeDefs;
+import Build;
+import Debug;
+import Flags;
 
 namespace Corvorium {
 export enum class LogLevelBits : u8 {

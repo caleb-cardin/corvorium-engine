@@ -1,5 +1,4 @@
 
-target_compile_definitions(CorvoriumEngine PUBLIC VULKAN_HPP_NO_EXCEPTIONS)
 target_link_libraries(CorvoriumEngine
         PRIVATE
         EASTL

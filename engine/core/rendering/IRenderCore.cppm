@@ -4,7 +4,6 @@ module;
 #include "EASTL/string.h"
 #include "EASTL/vector.h"
 export module Rendering:RenderCore;
-import Common;
 import OS;
 import :Types;
 import :CommandBuffer;
