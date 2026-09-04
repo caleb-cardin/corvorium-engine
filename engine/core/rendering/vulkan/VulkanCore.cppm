@@ -25,7 +25,9 @@ public:
     VulkanCore() = default;
     ~VulkanCore() override;
 
-    [[nodiscard]] RenderError Initialize(OS::Window* MainWindow, FileSystem::IFileProvider* InFileProvider) override;
+    [[nodiscard]] RenderError Initialize(Event::GlobalEventBus* EventHandler,
+                                         OS::Window* MainWindow,
+                                         FileSystem::IFileProvider* InFileProvider) override;
 
     [[nodiscard]] bool IsInitialized() const override { return Initialized; }
 
@@ -45,11 +47,10 @@ public:
 
     [[nodiscard]] const Util::SurfaceInfo& GetSurfaceInfo() const { return SurfaceInfo; };
 
-    static void OnWindowClosed(OS::Window* Window, void* OwningDevice);
-
     [[nodiscard]] const VulkanPipeline* FindPipeline(PipelineHandle Pipeline);
 
 private:
+    Event::GlobalEventBus* EventBus{nullptr};
     FileSystem::IFileProvider* FileProvider{nullptr};
     vk::Instance Instance{nullptr};
     vk::DebugUtilsMessengerEXT DebugMessenger{nullptr};
@@ -81,6 +82,9 @@ private:
     [[nodiscard]] bool InitPipelineCache();
 
     void Teardown();
+
+    bool HandleFramebufferResized(const OS::WindowFramebufferResizeEvent& Event);
+    bool HandleWindowClosed(const OS::WindowCloseEvent& Event);
 
     bool FindPresentQueueFamily(vk::SurfaceKHR Surface, u32& OutPresentFamily) const;
     eastl::vector<QueueData> CreateQueueInfos(eastl::vector<vk::DeviceQueueCreateInfo>& OutQueueInfos) const;

@@ -11,7 +11,6 @@ module;
 #include <limits>
 
 module Rendering:VulkanSwapchain;
-import OS;
 import :VulkanImage;
 import :VulkanUtils;
 import :Types;
@@ -86,13 +85,11 @@ public:
 
     [[nodiscard]] vk::Extent2D GetExtent() const { return CurrentExtent; }
 
-    void GetFramebufferSize(u32& Width, u32& Height) const;
-
     [[nodiscard]] RenderError CreateOrRecreateSwapchain();
     [[nodiscard]] bool IsOutOfDate() const { return bIsOutOfDate; }
     [[nodiscard]] bool IsMinimized() const { return bIsMinimized; }
 
-    static void OnWindowResized(u32 Width, u32 Height, void* Swapchain);
+    void OnWindowResized(u32 Width, u32 Height);
 
     [[nodiscard]] vk::Result WaitForFence() const;
     [[nodiscard]] vk::Result AcquireImage();

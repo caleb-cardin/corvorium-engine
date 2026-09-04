@@ -41,17 +41,9 @@ VulkanSwapchain::~VulkanSwapchain()
 
 bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
 {
-    Window = Params.Window;
     Core = Params.Core;
+    Window = Params.Window;
     QueueFamilyIndices = {Params.GraphicsQueue, Params.PresentQueue};
-
-    OS::WindowCallbackData CallbackData{
-        .ResizeFn = OnWindowResized,
-        .ResizeUserPtr = this,
-        .CloseFn = VulkanCore::OnWindowClosed,
-        .CloseUserPtr = Core
-    };
-    Params.Window->SetCallbackData(CallbackData);
 
     vk::CommandPoolCreateInfo cmdPoolInfo;
     cmdPoolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
@@ -131,11 +123,6 @@ void VulkanSwapchain::Teardown()
     }
 }
 
-void VulkanSwapchain::GetFramebufferSize(u32& Width, u32& Height) const
-{
-    return Window->GetFramebufferSize(Width, Height);
-}
-
 RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 {
     // TEMPORARY FIX TODO: Correctly handle swapchain resizing to avoid images destroy-during-use.
@@ -174,7 +161,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     if (surfaceCaps.surfaceCapabilities.currentExtent.width == UINT32_MAX ||
         surfaceCaps.surfaceCapabilities.currentExtent.height == UINT32_MAX)
     {
-        GetFramebufferSize(extent.width, extent.height);
+        Window->GetFramebufferSize(extent.width, extent.height);
 
         extent.width = eastl::clamp(extent.width,
                                     surfaceCaps.surfaceCapabilities.minImageExtent.width,
@@ -296,14 +283,13 @@ bool VulkanSwapchain::CreateSyncPrimitives()
     return true;
 }
 
-void VulkanSwapchain::OnWindowResized(u32 Width, u32 Height, void* Swapchain)
+void VulkanSwapchain::OnWindowResized(u32 Width, u32 Height)
 {
-    auto* swapchain = static_cast<VulkanSwapchain*>(Swapchain);
-    swapchain->bIsOutOfDate = true;
+    bIsOutOfDate = true;
     if (Width == 0 || Height == 0)
-        swapchain->bIsMinimized = true;
+        bIsMinimized = true;
     else
-        swapchain->bIsMinimized = false;
+        bIsMinimized = false;
 }
 
 vk::Result VulkanSwapchain::WaitForFence() const

@@ -14,5 +14,6 @@ target_sources(CorvoriumEngine
         Window.cppm
         WindowManager.cppm
         #PRIVATE FILE_SET os_impl TYPE CXX_MODULES FILES
+        private/Window.cppm
 
 )

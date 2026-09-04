@@ -2,11 +2,13 @@
 module;
 #include "CorvoriumApi.h"
 #include "common/Assert.hpp"
+#include "event/EventType.hpp"
 
 #include "GLFW/glfw3.h"
 export module OS:Window;
 import TypeDefs;
 import CommonTypes;
+import Event;
 
 namespace Corvorium::OS {
 class WindowManager;
@@ -15,12 +17,8 @@ export class Window;
 using WindowFramebufferResizeCallbackFn = void(*)(u32 Width, u32 Height, void* pData);
 using WindowCloseCallbackFn = void(*)(Window* Window, void* pData);
 
-export struct WindowCallbackData {
-    WindowFramebufferResizeCallbackFn ResizeFn{nullptr};
-    void* ResizeUserPtr{nullptr};
-    WindowCloseCallbackFn CloseFn{nullptr};
-    void* CloseUserPtr{nullptr};
-};
+export struct WindowFramebufferResizeEvent;
+export struct WindowCloseEvent;
 
 namespace Internal {
 using WindowCloseCallback = GLFWwindowclosefun;
@@ -51,7 +49,6 @@ public:
     [[nodiscard]] Handle_t GetHandle() const { return Handle; }
     [[nodiscard]] void* GetWindowRaw() const { return pWindow; }
 
-    void SetCallbackData(const WindowCallbackData& InCallbackData) { CallbackData = InCallbackData; }
 
     /**
      * @return true if size is valid. false if window is minimized.
@@ -69,8 +66,6 @@ private:
     WindowManager* Manager{nullptr};
     Handle_t Handle{};
     GLFWwindow* pWindow{nullptr};
-
-    WindowCallbackData CallbackData{};
 
     Window(WindowManager* InManager, u32 Width, u32 Height, const char* Title)
         : Manager{InManager}
@@ -91,20 +86,23 @@ private:
         glfwSetFramebufferSizeCallback(pWindow, Window::FramebufferResizeCallback_Internal);
     }
 
-    static void FramebufferResizeCallback_Internal(GLFWwindow* WindowRaw, i32 Width, i32 Height)
-    {
-        auto* Win = static_cast<Window*>(glfwGetWindowUserPointer(WindowRaw));
-        Win->CallbackData.ResizeFn(static_cast<u32>(Width), static_cast<u32>(Height), Win->CallbackData.ResizeUserPtr);
-    }
-
-    static void CloseCallback_Internal(GLFWwindow* WindowRaw)
-    {
-        auto* Win = static_cast<Window*>(glfwGetWindowUserPointer(WindowRaw));
-        Win->CallbackData.CloseFn(Win, Win->CallbackData.CloseUserPtr);
-    }
+    static void FramebufferResizeCallback_Internal(GLFWwindow* WindowRaw, i32 Width, i32 Height);
+    static void CloseCallback_Internal(GLFWwindow* WindowRaw);
 
     void SetWindowCloseCallbackFn(Internal::WindowCloseCallback Fn) { glfwSetWindowCloseCallback(pWindow, Fn); }
 };
 
 export using WindowHandle = Window::Handle_t;
+
+struct WindowFramebufferResizeEvent {
+    DECLARE_EVENT_TYPE_TRAITS(Corvorium::OS::WindowFramebufferResizeEvent);
+    WindowHandle Window;
+    u32 Width{};
+    u32 Height{};
+};
+
+struct WindowCloseEvent {
+    DECLARE_EVENT_TYPE_TRAITS(Corvorium::OS::WindowCloseEvent);
+    WindowHandle Window;
+};
 }

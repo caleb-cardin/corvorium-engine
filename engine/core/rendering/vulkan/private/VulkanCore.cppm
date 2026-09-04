@@ -24,11 +24,13 @@ VulkanCore::~VulkanCore()
     Teardown();
 }
 
-RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProvider* InFileProvider)
+RenderError VulkanCore::Initialize(Event::GlobalEventBus* EventHandler, OS::Window* MainWindow, FileSystem::IFileProvider* InFileProvider)
 {
+    CRVM_ASSERT(EventHandler);
     CRVM_ASSERT(MainWindow);
     CRVM_ASSERT(InFileProvider);
 
+    EventBus = EventHandler;
     FileProvider = InFileProvider;
 
     if (!InitInstance())
@@ -81,6 +83,17 @@ RenderError VulkanCore::Initialize(OS::Window* MainWindow, FileSystem::IFileProv
         Teardown();
         return RenderError::InitializationFailed;
     }
+
+    EventBus->Subscribe<OS::WindowFramebufferResizeEvent>(
+        [this](const OS::WindowFramebufferResizeEvent& Event)-> bool {
+            return this->HandleFramebufferResized(Event);
+        },
+        Event::GlobalEventCategory::First);
+    EventBus->Subscribe<OS::WindowCloseEvent>(
+        [this](const OS::WindowCloseEvent& Event)-> bool {
+            return this->HandleWindowClosed(Event);
+        },
+        Event::GlobalEventCategory::First);
 
     Initialized = true;
     return RenderError::Success;
@@ -211,18 +224,6 @@ ResultValue<PipelineHandle> VulkanCore::CreatePipeline(const GraphicsPipelineCre
     CRVM_ASSERT(success);
 
     return it->second.GetHandle();
-}
-
-void VulkanCore::OnWindowClosed(OS::Window* Window, void* OwningDevice)
-{
-    CRVM_ASSERT(Window);
-    CRVM_ASSERT(OwningDevice);
-    auto* Device = static_cast<VulkanCore*>(OwningDevice);
-    const OS::WindowHandle handle = Window->GetHandle();
-    if (Device->Swapchains.contains(handle))
-    {
-        Device->Swapchains.erase(handle);
-    }
 }
 
 const VulkanPipeline* VulkanCore::FindPipeline(PipelineHandle Pipeline)
@@ -643,6 +644,24 @@ void VulkanCore::Teardown()
     {
         Instance.destroy();
     }
+}
+
+bool VulkanCore::HandleFramebufferResized(const OS::WindowFramebufferResizeEvent& Event)
+{
+    if (auto it = Swapchains.find(Event.Window); it != Swapchains.end())
+    {
+        it->second.OnWindowResized(Event.Width, Event.Height);
+    }
+    return true;
+}
+
+bool VulkanCore::HandleWindowClosed(const OS::WindowCloseEvent& Event)
+{
+    if (Swapchains.contains(Event.Window))
+    {
+        Swapchains.erase(Event.Window);
+    }
+    return true;
 }
 
 bool VulkanCore::FindPresentQueueFamily(vk::SurfaceKHR Surface, u32& OutPresentFamily) const

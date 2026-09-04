@@ -12,6 +12,7 @@ module;
 #include "common/Logging.hpp"
 export module Application;
 import Logging;
+import Event;
 import OS;
 import Rendering;
 import VFS;
@@ -32,6 +33,7 @@ protected:
 private:
     eastl::string Name;
     Log::Logger AppLogger;
+    eastl::unique_ptr<Event::GlobalEventBus> EventBus{nullptr};
     eastl::unique_ptr<OS::WindowManager> WindowManager{nullptr};
     eastl::unique_ptr<Rendering::IRenderCore> Rendering{nullptr};
     eastl::unique_ptr<VFS::VirtualFileSystem> FileSystem{nullptr};
@@ -44,7 +46,8 @@ private:
 Application::Application(eastl::string&& AppName)
     : Name{eastl::move(AppName)}
     , AppLogger{Name}
-    , WindowManager{eastl::make_unique<Corvorium::OS::WindowManager>()}
+    , EventBus{eastl::make_unique<Event::GlobalEventBus>()}
+    , WindowManager{eastl::make_unique<OS::WindowManager>(EventBus.get())}
     , Rendering{Rendering::IRenderCore::CreateRenderCore(Rendering::RenderingAPI::Vulkan)}
     , FileSystem{eastl::make_unique<VFS::VirtualFileSystem>()}
 {
@@ -55,7 +58,7 @@ Application::Application(eastl::string&& AppName)
         return;
     }
 
-    if (Rendering->Initialize(WindowManager->GetWindow(MainWindowHandle), FileSystem.get()) != Rendering::RenderError::Success)
+    if (Rendering->Initialize(EventBus.get(), WindowManager->GetWindow(MainWindowHandle), FileSystem.get()) != Rendering::RenderError::Success)
     {
         return;
     }

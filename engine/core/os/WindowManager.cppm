@@ -1,6 +1,7 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
+#include "common/Assert.hpp"
 
 #include "GLFW/glfw3.h"
 #include "EASTL/hash_map.h"
@@ -8,15 +9,20 @@ module;
 
 export module OS:WindowManager;
 import :Window;
+import Event;
 
 namespace Corvorium::OS {
 void WindowCloseCallback(GLFWwindow* WindowRaw);
 
 export class CRVM_API WindowManager {
 public:
-    WindowManager()
-        : Windows{}
+    WindowManager() = delete;
+
+    WindowManager(Event::GlobalEventBus* InEventBus)
+        : EventBus{InEventBus}
+        , Windows{}
     {
+        CRVM_ASSERT(EventBus);
         if (glfwInit())
         {
             Initialized = true;
@@ -69,7 +75,10 @@ public:
         Windows.erase(Handle);
     }
 
+    [[nodiscard]] Event::GlobalEventBus* GetEventHandler() const { return EventBus; }
+
 private:
+    Event::GlobalEventBus* EventBus{nullptr};
     eastl::hash_map<WindowHandle, eastl::unique_ptr<Window>, HandleHash> Windows{};
 
     bool Initialized{false};

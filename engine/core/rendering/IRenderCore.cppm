@@ -5,6 +5,7 @@ module;
 #include "EASTL/vector.h"
 export module Rendering:RenderCore;
 import OS;
+import Event;
 import :Types;
 import :CommandBuffer;
 
@@ -23,7 +24,9 @@ public:
 
     [[nodiscard]] virtual RenderError InitializeWindow(OS::Window* Window) = 0;
 
-    [[nodiscard]] virtual RenderError Initialize(OS::Window* MainWindow, FileSystem::IFileProvider* FileProvider) = 0;
+    [[nodiscard]] virtual RenderError Initialize(Event::GlobalEventBus* EventHandler,
+                                                 OS::Window* MainWindow,
+                                                 FileSystem::IFileProvider* FileProvider) = 0;
     [[nodiscard]] virtual bool IsInitialized() const = 0;
     [[nodiscard]] virtual RenderError BeginFrame(OS::WindowHandle Window) = 0;
     [[nodiscard]] virtual ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority) = 0;
