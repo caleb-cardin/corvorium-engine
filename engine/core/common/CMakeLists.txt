@@ -3,6 +3,7 @@ target_sources(CorvoriumEngine
         Build.cppm
         Debug.cppm
         Flags.cppm
+        Hash.cppm
         Logging.cppm
         Result.cppm
         TypeDefs.cppm
