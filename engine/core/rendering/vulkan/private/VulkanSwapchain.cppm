@@ -27,7 +27,7 @@ VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
         return;
     }
 
-    Initialized = Initialize(Params);
+    Initialize(Params);
 }
 
 VulkanSwapchain::VulkanSwapchain(vk::SurfaceKHR InSurface)
@@ -49,10 +49,10 @@ bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
     cmdPoolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
     cmdPoolInfo.queueFamilyIndex = QueueFamilyIndices.Queues.Graphics;
 
-    vk::Device vkDevice = Core->GetDevice();
+    vk::Device device = Core->GetDevice();
     for (auto& cmdPool: FrameCommandPools)
     {
-        vk::ResultValue result = vkDevice.createCommandPool(cmdPoolInfo);
+        vk::ResultValue result = device.createCommandPool(cmdPoolInfo);
         CRVM_LOG_RETURN_IF(!result.has_value(), false, VulkanLogger, kError, "Failed to create swapchain command pools.");
         cmdPool = result.value;
     }
@@ -71,21 +71,20 @@ bool VulkanSwapchain::Initialize(const VulkanSwapchainCreateParams& Params)
         return false;
     }
 
-    Initialized = true;
     return true;
 }
 
 void VulkanSwapchain::Teardown()
 {
-    if (Initialized && Core)
+    if (Core)
     {
-        vk::Device vkDevice = Core->GetDevice();
+        vk::Device device = Core->GetDevice();
 
-        Reset();
+        ReleaseCommandResources();
 
         for (auto view: ImageViews)
         {
-            vkDevice.destroyImageView(view);
+            device.destroyImageView(view);
         }
         ImageViews.clear();
         Images.clear();
@@ -95,49 +94,51 @@ void VulkanSwapchain::Teardown()
             pDepth.reset();
         }
 
-        if (Swapchain) vkDevice.destroySwapchainKHR(Swapchain);
+        if (Swapchain) device.destroySwapchainKHR(Swapchain);
 
         for (const auto& cmdPool: FrameCommandPools)
         {
-            if (cmdPool) vkDevice.destroyCommandPool(cmdPool);
+            if (cmdPool) device.destroyCommandPool(cmdPool);
         }
 
         for (const auto& fence: InFlightFences)
         {
-            if (fence) vkDevice.destroyFence(fence);
+            if (fence) device.destroyFence(fence);
         }
         for (const auto& semaphore: ImageAvailableSemaphores)
         {
-            if (semaphore) vkDevice.destroySemaphore(semaphore);
+            if (semaphore) device.destroySemaphore(semaphore);
         }
         for (const auto& semaphore: FrameCompleteSemaphores)
         {
-            vkDevice.destroySemaphore(semaphore);
+            device.destroySemaphore(semaphore);
         }
 
         if (vk::Instance vulkanInstance = Core->GetInstance(); Surface)
         {
             vulkanInstance.destroySurfaceKHR(Surface);
         }
-        Initialized = false;
     }
 }
 
 RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 {
     // TEMPORARY FIX TODO: Correctly handle swapchain resizing to avoid images destroy-during-use.
-    vk::Device vkDevice = Core->GetDevice();
-    vkDevice.waitIdle();
+    vk::Device device = Core->GetDevice();
+    device.waitIdle();
 
+    ReleaseCommandResources();
 
     Initialized = false;
 
+    vk::SwapchainKHR oldSwapchain = nullptr;
     if (Swapchain)
     {
+        oldSwapchain = Swapchain;
         Images.clear();
         for (auto view: ImageViews)
         {
-            vkDevice.destroyImageView(view);
+            device.destroyImageView(view);
         }
         ImageViews.clear();
 
@@ -192,19 +193,25 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     info.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
     info.presentMode = surfaceInfo.PresentMode;
     info.clipped = true;
-    info.oldSwapchain = Swapchain;
+    info.oldSwapchain = oldSwapchain;
 
-    const vk::ResultValue scResult = vkDevice.createSwapchainKHR(info);
+    const vk::ResultValue scResult = device.createSwapchainKHR(info);
     CRVM_LOG_RETURN_IF(!scResult.has_value(), RenderError::InitializationFailed, VulkanLogger, kError, "Failed to create swapchain.");
     Swapchain = scResult.value;
     CurrentExtent = extent;
+
+    if (oldSwapchain)
+    {
+        device.destroySwapchainKHR(oldSwapchain);
+    }
+
     // Swapchain Color attachments
 
     u32 imageCount;
-    res = vkDevice.getSwapchainImagesKHR(Swapchain, &imageCount, nullptr);
+    res = device.getSwapchainImagesKHR(Swapchain, &imageCount, nullptr);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get swapchain images.");
     Images.resize(imageCount);
-    res = vkDevice.getSwapchainImagesKHR(Swapchain, &imageCount, Images.data());
+    res = device.getSwapchainImagesKHR(Swapchain, &imageCount, Images.data());
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get swapchain images.");
 
     ImageViews.resize(imageCount);
@@ -217,7 +224,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
         viewInfo.components = vk::ComponentMapping{};
         viewInfo.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
-        if (auto viewResult = vkDevice.createImageView(viewInfo); viewResult.has_value())
+        if (auto viewResult = device.createImageView(viewInfo); viewResult.has_value())
         {
             CRVM_LOG_RETURN_IF(!viewResult.has_value(),
                                RenderError::InitializationFailed,
@@ -257,26 +264,26 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 
 bool VulkanSwapchain::CreateSyncPrimitives()
 {
-    vk::Device vkDevice = Core->GetDevice();
+    vk::Device device = Core->GetDevice();
     vk::FenceCreateInfo fenceInfo{};
     fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
     for (auto& fence: InFlightFences)
     {
-        auto result = vkDevice.createFence(fenceInfo);
+        auto result = device.createFence(fenceInfo);
         if (!result.has_value()) return false;
         fence = result.value;
     }
     vk::SemaphoreCreateInfo semaphoreInfo{};
     for (auto& semaphore: ImageAvailableSemaphores)
     {
-        auto result = vkDevice.createSemaphore(semaphoreInfo);
+        auto result = device.createSemaphore(semaphoreInfo);
         if (!result.has_value()) return false;
         semaphore = result.value;
     }
     FrameCompleteSemaphores.resize(Images.size());
     for (auto& semaphore: FrameCompleteSemaphores)
     {
-        auto result = vkDevice.createSemaphore(semaphoreInfo);
+        auto result = device.createSemaphore(semaphoreInfo);
         if (!result.has_value()) return false;
         semaphore = result.value;
     }
@@ -294,18 +301,18 @@ void VulkanSwapchain::OnWindowResized(u32 Width, u32 Height)
 
 vk::Result VulkanSwapchain::WaitForFence() const
 {
-    vk::Device vkDevice = Core->GetDevice();
-    vk::Result res = vkDevice.waitForFences(1, &InFlightFences[CurrentFrame], true, kMaxTimeout);
+    vk::Device device = Core->GetDevice();
+    vk::Result res = device.waitForFences(1, &InFlightFences[CurrentFrame], true, kMaxTimeout);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to wait for swapchain fences.");
-    res = vkDevice.resetFences(1, &InFlightFences[CurrentFrame]);
+    res = device.resetFences(1, &InFlightFences[CurrentFrame]);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain fences.");
     return vk::Result::eSuccess;
 }
 
 vk::Result VulkanSwapchain::AcquireImage()
 {
-    vk::Device vkDevice = Core->GetDevice();
-    vk::ResultValue result = vkDevice.acquireNextImageKHR(Swapchain, kMaxTimeout, ImageAvailableSemaphores[CurrentFrame]);
+    vk::Device device = Core->GetDevice();
+    vk::ResultValue result = device.acquireNextImageKHR(Swapchain, kMaxTimeout, ImageAvailableSemaphores[CurrentFrame]);
     if (result.result == vk::Result::eSuboptimalKHR) bIsOutOfDate = true;
     CRVM_LOG_RETURN_IF(!result.has_value(),
                        result.result,
@@ -318,10 +325,25 @@ vk::Result VulkanSwapchain::AcquireImage()
 
 vk::Result VulkanSwapchain::Reset()
 {
-    vk::Device vkDevice = Core->GetDevice();
-    vk::Result res = vkDevice.resetCommandPool(FrameCommandPools[CurrentFrame], vk::CommandPoolResetFlagBits::eReleaseResources);
+    vk::Device device = Core->GetDevice();
+    vk::Result res = device.resetCommandPool(FrameCommandPools[CurrentFrame]);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
     FrameCommandLists[CurrentFrame].CommandBuffers.clear();
+    return vk::Result::eSuccess;
+}
+
+vk::Result VulkanSwapchain::ReleaseCommandResources()
+{
+    vk::Device device = Core->GetDevice();
+    for (auto& cmdPool: FrameCommandPools)
+    {
+        vk::Result res = device.resetCommandPool(cmdPool, vk::CommandPoolResetFlagBits::eReleaseResources);
+        CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
+    }
+    for (auto& cmdList: FrameCommandLists)
+    {
+        cmdList.CommandBuffers.clear();
+    }
     return vk::Result::eSuccess;
 }
 

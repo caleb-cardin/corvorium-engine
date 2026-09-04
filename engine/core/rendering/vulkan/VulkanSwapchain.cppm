@@ -94,6 +94,7 @@ public:
     [[nodiscard]] vk::Result WaitForFence() const;
     [[nodiscard]] vk::Result AcquireImage();
     [[nodiscard]] vk::Result Reset();
+    [[nodiscard]] vk::Result ReleaseCommandResources();
 
     [[nodiscard]] vk::Result InitializeCommandList();
     [[nodiscard]] vk::Result AllocateCommandBuffer(i32 Priority, vk::CommandBuffer& OutCmdBuf);

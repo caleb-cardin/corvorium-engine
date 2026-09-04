@@ -169,7 +169,7 @@ ResultValue<CommandBuffer> VulkanCore::AllocateCommandBuffer(OS::WindowHandle Wi
                        ResultError(RenderError::InvalidHandle),
                        VulkanLogger,
                        kError,
-                       "Invalid window handle passed to RenderDevice::EndFrame()");
+                       "Invalid window handle passed to RenderDevice::AllocateCommandBuffer()");
 
     VulkanSwapchain& swapchain = it->second;
 
