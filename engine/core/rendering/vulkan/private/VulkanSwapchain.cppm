@@ -6,8 +6,8 @@ module;
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
 
-#include "vulkan/vulkan.hpp"
 module Rendering:VulkanSwapchainImpl;
+import vulkan;
 import :VulkanSwapchain;
 import :VulkanCore;
 
@@ -155,7 +155,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo2;
     surfaceInfo2.surface = Surface;
     vk::SurfaceCapabilities2KHR surfaceCaps;
-    vk::Result res = Core->GetPhysicalDevice().getSurfaceCapabilities2KHR(&surfaceInfo2, &surfaceCaps, VulkanDispatcher);
+    vk::Result res = Core->GetPhysicalDevice().getSurfaceCapabilities2KHR(&surfaceInfo2, &surfaceCaps);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface capabilities.");
 
     vk::Extent2D extent = surfaceCaps.surfaceCapabilities.currentExtent;

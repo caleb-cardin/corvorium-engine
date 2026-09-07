@@ -6,11 +6,10 @@ module;
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
 
-#include "vulkan/vulkan.hpp"
-
 #include <limits>
 
 module Rendering:VulkanSwapchain;
+import vulkan;
 import :VulkanImage;
 import :VulkanUtils;
 import :Types;

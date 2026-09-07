@@ -3,8 +3,8 @@ module;
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
 
-#include "vulkan/vulkan.hpp"
 module Rendering:VulkanPipelineImpl;
+import vulkan;
 import :VulkanPipeline;
 import :VulkanPipelineUtils;
 import :VulkanCore;

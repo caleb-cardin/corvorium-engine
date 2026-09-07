@@ -2,9 +2,10 @@
 module;
 
 #include "EASTL/span.h"
-#include "vulkan/vulkan.hpp"
+
 #include "vma/vk_mem_alloc.h"
 module Rendering:VulkanImage;
+import vulkan;
 import CommonTypes;
 import :Types;
 

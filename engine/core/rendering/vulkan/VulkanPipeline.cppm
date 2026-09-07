@@ -4,8 +4,8 @@ module;
 #include "common/Assert.hpp"
 #include "EASTL/variant.h"
 
-#include "vulkan/vulkan.hpp"
 module Rendering:VulkanPipeline;
+import vulkan;
 import :Types;
 import :VulkanShaderCache;
 import CommonTypes;

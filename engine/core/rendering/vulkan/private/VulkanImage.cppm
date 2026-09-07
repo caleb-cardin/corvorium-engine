@@ -3,9 +3,9 @@ module;
 #include "common/Assert.hpp"
 #include "common/Logging.hpp"
 
-#include "vulkan/vulkan.hpp"
 #include "vma/vk_mem_alloc.h"
 module Rendering:VulkanImageImpl;
+import vulkan;
 import :VulkanImage;
 import :VulkanCore;
 

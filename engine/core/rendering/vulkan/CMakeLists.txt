@@ -1,6 +1,7 @@
 include(VulkanDependencies.cmake)
 
-target_compile_definitions(CorvoriumEngine PUBLIC VULKAN_HPP_NO_EXCEPTIONS VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
+target_compile_definitions(CorvoriumEngine PRIVATE
+        VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 target_link_libraries(CorvoriumEngine
         PRIVATE
         ${Corvorium_VULKAN_LIBS}

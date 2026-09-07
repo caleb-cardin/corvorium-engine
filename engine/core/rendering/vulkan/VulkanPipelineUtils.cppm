@@ -4,12 +4,13 @@ module;
 
 #include "EASTL/array.h"
 #include "EASTL/vector.h"
-#include <vulkan/vulkan.hpp>
+
 
 #include "common/Logging.hpp"
 #include "EASTL/span.h"
 
 module Rendering:VulkanPipelineUtils;
+import vulkan;
 import :VulkanUtils;
 import :Types;
 

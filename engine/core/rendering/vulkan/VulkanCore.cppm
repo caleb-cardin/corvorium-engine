@@ -4,9 +4,10 @@ module;
 #include "EASTL/hash_map.h"
 #include "EASTL/vector_map.h"
 #include "EASTL/string.h"
-#include "vulkan/vulkan.hpp"
+
 #include "vma/vk_mem_alloc.h"
 export module Rendering:VulkanCore;
+import vulkan;
 import :RenderCore;
 import :VulkanSwapchain;
 import :VulkanPipeline;

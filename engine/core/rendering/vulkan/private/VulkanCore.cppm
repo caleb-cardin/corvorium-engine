@@ -8,15 +8,16 @@ module;
 #include "EASTL/unique_ptr.h"
 #include "EASTL/variant.h"
 
-#include "vulkan/vulkan.hpp"
 #include "vma/vk_mem_alloc.h"
 module Rendering:VulkanCoreImpl;
+import vulkan;
 import :VulkanCore;
 import :CommandBufferImpl;
 import :VulkanCommandBuffer;
 import :VulkanSwapchain;
 import :VulkanUtils;
 import Build;
+
 
 namespace Corvorium::Rendering::Vulkan {
 VulkanCore::~VulkanCore()
@@ -238,11 +239,7 @@ const VulkanPipeline* VulkanCore::FindPipeline(PipelineHandle Pipeline)
 
 bool VulkanCore::InitInstance()
 {
-    VulkanDispatcher.init();
-    vk::detail::DynamicLoader dl;
-    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    VulkanDispatcher.init(vkGetInstanceProcAddr);
-
+    vk::detail::defaultDispatchLoaderDynamic.init();
     vk::ApplicationInfo appInfo;
     appInfo.apiVersion = vk::ApiVersion14;
     appInfo.pApplicationName = ""; // TODO
@@ -290,7 +287,7 @@ bool VulkanCore::InitInstance()
     const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo);
     CRVM_LOG_RETURN_IF(!result.has_value(), false, VulkanLogger, kError, "Failed to create Instance.");
     Instance = result.value;
-    VulkanDispatcher.init(Instance);
+    vk::detail::defaultDispatchLoaderDynamic.init(Instance);
 
     vk::DebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
     debugMessengerInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
@@ -300,7 +297,7 @@ bool VulkanCore::InitInstance()
 
     if constexpr (Build::DebugBuild())
     {
-        vk::Result res = Instance.createDebugUtilsMessengerEXT(&debugMessengerInfo, nullptr, &DebugMessenger, VulkanDispatcher);
+        vk::Result res = Instance.createDebugUtilsMessengerEXT(&debugMessengerInfo, nullptr, &DebugMessenger);
         if (res != vk::Result::eSuccess)
             CRVM_LOG(VulkanLogger, kError, "Failed to create debug messenger.");
     }
@@ -385,24 +382,24 @@ bool VulkanCore::SelectSurfaceFormats(vk::SurfaceKHR Surface)
     vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo;
     surfaceInfo.surface = Surface;
     vk::SurfaceCapabilities2KHR surfaceCaps;
-    vk::Result res = PhysicalDevice.getSurfaceCapabilities2KHR(&surfaceInfo, &surfaceCaps, VulkanDispatcher);
+    vk::Result res = PhysicalDevice.getSurfaceCapabilities2KHR(&surfaceInfo, &surfaceCaps);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface capabilities.");
 
     u32 formatCount = 0;
-    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, nullptr, VulkanDispatcher);
+    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, nullptr);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface formats.");
     eastl::vector<vk::SurfaceFormat2KHR> surfaceFormats{formatCount, vk::SurfaceFormat2KHR{}};
-    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data(), VulkanDispatcher);
+    res = PhysicalDevice.getSurfaceFormats2KHR(&surfaceInfo, &formatCount, surfaceFormats.data());
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface formats.");
 
     const vk::SurfaceFormat2KHR selectedFormat = SelectOptimalFormat(surfaceFormats);
     SurfaceInfo.ColorFormat = selectedFormat.surfaceFormat;
 
     u32 presentModeCount = 0;
-    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, nullptr, VulkanDispatcher);
+    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, nullptr);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface present modes.");
     eastl::vector<vk::PresentModeKHR> surfacePresentModes{presentModeCount, vk::PresentModeKHR{}};
-    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data(), VulkanDispatcher);
+    res = PhysicalDevice.getSurfacePresentModesKHR(Surface, &presentModeCount, surfacePresentModes.data());
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, false, VulkanLogger, kError, "Failed to get surface present modes.");
 
     SurfaceInfo.PresentMode = SelectOptimalPresentMode(surfacePresentModes);
@@ -547,11 +544,10 @@ bool VulkanCore::InitDevice()
     {
         return false;
     }
+    vk::detail::defaultDispatchLoaderDynamic.init(Device);
 
     Device.getQueue(queueInfos[0].FamilyIndex, queueInfos[0].QueueIndex, &GraphicsQueue.Queue);
     Device.getQueue(queueInfos[1].FamilyIndex, queueInfos[1].QueueIndex, &TransferQueue.Queue);
-
-    VulkanDispatcher.init(Device);
 
     // Allocator - init here for access to enabled extensions
     return InitAllocator(extensions);
@@ -588,9 +584,13 @@ bool VulkanCore::InitAllocator(const eastl::vector<const char*>& EnabledExtensio
     info.pDeviceMemoryCallbacks = nullptr;
     info.pHeapSizeLimit = nullptr;
 
+    vk::detail::DynamicLoader dl;
+    auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    auto vkGetDeviceProcAddr = dl.getProcAddress<PFN_vkGetDeviceProcAddr>("vkGetDeviceProcAddr");
+
     VmaVulkanFunctions functions{};
-    functions.vkGetInstanceProcAddr = VulkanDispatcher.vkGetInstanceProcAddr;
-    functions.vkGetDeviceProcAddr = VulkanDispatcher.vkGetDeviceProcAddr;
+    functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     info.pVulkanFunctions = &functions;
 
     info.instance = Instance;

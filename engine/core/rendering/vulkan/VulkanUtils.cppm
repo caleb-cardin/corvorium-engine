@@ -5,25 +5,31 @@ module;
 #include "common/Logging.hpp"
 
 #include "EASTL/vector.h"
-#include "vulkan/vulkan.hpp"
+
+#include "vulkan/vulkan_core.h"
 #include "GLFW/glfw3.h"
 module Rendering:VulkanUtils;
+import vulkan;
 import Logging;
 import Debug;
 import Flags;
 import RenderingCommon;
 import OS;
 
-namespace Corvorium::Rendering::Vulkan {
-Log::Logger VulkanLogger{"VulkanRendering"};
+namespace vk::detail {
+extern DispatchLoaderDynamic defaultDispatchLoaderDynamic;
+}
 
-auto& VulkanDispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+namespace Corvorium::Rendering::Vulkan {
+inline auto& VulkanDispatch = vk::detail::defaultDispatchLoaderDynamic;
+
+Log::Logger VulkanLogger{"VulkanRendering"};
 
 constexpr u32 kMaxFramesInFlight = 2;
 constexpr u64 kMaxTimeout = UINT64_MAX;
 
 namespace Util {
-VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
+vk::Bool32 DebugCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT MessageSeverity,
     [[maybe_unused]] vk::DebugUtilsMessageTypeFlagsEXT MessageType,
     const vk::DebugUtilsMessengerCallbackDataEXT* CallbackData,
@@ -51,7 +57,7 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(
     default: { break; }
     }
     DebugBreak();
-    return VK_FALSE;
+    return false;
 }
 
 struct SurfaceInfo {
@@ -62,9 +68,12 @@ struct SurfaceInfo {
 
 vk::SurfaceKHR CreateWindowSurface(const vk::Instance Instance, const OS::Window* Window)
 {
-    VkSurfaceKHR surface;
-    VkResult res = glfwCreateWindowSurface(Instance, static_cast<GLFWwindow*>(Window->GetWindowRaw()), nullptr, &surface);
-    CRVM_LOG_RETURN_IF(res != VK_SUCCESS, nullptr, VulkanLogger, kError, "Failed to create surface.");
+    vk::SurfaceKHR surface;
+    auto res = static_cast<vk::Result>(glfwCreateWindowSurface(Instance,
+                                                               static_cast<GLFWwindow*>(Window->GetWindowRaw()),
+                                                               nullptr,
+                                                               reinterpret_cast<VkSurfaceKHR*>(&surface)));
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, nullptr, VulkanLogger, kError, "Failed to create surface.");
     return surface;
 }
 

@@ -12,8 +12,8 @@ module;
 #include "EASTL/vector.h"
 #include "EASTL/vector_map.h"
 
-#include "vulkan/vulkan.hpp"
 module Rendering:VulkanShaderCache;
+import vulkan;
 import RenderingCommon;
 import ShaderCompiler;
 import OS;
