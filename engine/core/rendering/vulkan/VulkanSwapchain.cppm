@@ -6,13 +6,12 @@ module;
 #include "EASTL/unique_ptr.h"
 #include "EASTL/vector.h"
 
-#include <limits>
-
 module Rendering:VulkanSwapchain;
 import vulkan;
 import :VulkanImage;
 import :VulkanUtils;
 import :Types;
+import std;
 
 namespace Corvorium::Rendering::Vulkan {
 class VulkanCore;

@@ -2,10 +2,11 @@
 module;
 
 #include "EASTL/vector.h"
-#include <cstddef>
+
 module VFS:BackendInterface;
 import :Types;
 import OS;
+import std;
 
 using namespace Corvorium::FileSystem;
 

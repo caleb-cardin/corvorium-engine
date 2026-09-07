@@ -3,10 +3,6 @@ module;
 #include "CorvoriumApi.h"
 #include "common/FlagTypeMacro.hpp"
 
-#include <string>
-#include <memory>
-#include <source_location>
-
 #include "spdlog/logger.h"
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
@@ -16,6 +12,7 @@ export import TypeDefs;
 import Build;
 import Debug;
 import Flags;
+import std;
 
 namespace Corvorium {
 export enum class LogLevelBits : u8 {

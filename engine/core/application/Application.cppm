@@ -6,9 +6,6 @@ module;
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
 
-#include <filesystem>
-#include <print>
-
 #include "common/Logging.hpp"
 export module Application;
 import Logging;
@@ -16,6 +13,7 @@ import Event;
 import OS;
 import Rendering;
 import VFS;
+import std;
 
 export namespace Corvorium {
 class CRVM_API Application {

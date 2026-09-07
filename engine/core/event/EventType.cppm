@@ -1,10 +1,10 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 
-#include <type_traits>
 export module Event:Type;
 export import TypeDefs;
 export import Hash;
+import std;
 
 namespace Corvorium::Event {
 export using EventID = u64;

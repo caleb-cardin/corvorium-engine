@@ -6,12 +6,13 @@ module;
 #include "EASTL/vector_multimap.h"
 #include "EASTL/string.h"
 
-#include <filesystem>
 module VFS:MountTable;
 import :BackendInterface;
 import :Types;
 import OS;
 import Logging;
+
+import std;
 
 using namespace Corvorium::FileSystem;
 

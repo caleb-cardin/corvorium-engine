@@ -1,9 +1,6 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 
-#include <filesystem>
-#include <fstream>
-
 #include "common/Logging.hpp"
 
 module VFS:LooseFileSyncBackend;
@@ -11,6 +8,7 @@ import :BackendInterface;
 import :Types;
 import OS;
 import Logging;
+import std;
 
 using namespace Corvorium::FileSystem;
 

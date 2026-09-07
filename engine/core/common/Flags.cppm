@@ -1,9 +1,11 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
-#include <type_traits>
+
 export module Flags;
 export import TypeDefs;
+import std;
+
 export namespace Corvorium {
 template<typename E>
 struct FlagTypeTraits {
