@@ -13,7 +13,12 @@ target_sources(CorvoriumEngine
         FileProvider.cppm
         Window.cppm
         WindowManager.cppm
-        #PRIVATE FILE_SET os_impl TYPE CXX_MODULES FILES
+
+        input/Input.cppm
+        input/InputTypes.cppm
+        input/InputConversionHelpers.cppm
+        PRIVATE FILE_SET os_impl TYPE CXX_MODULES FILES
+        private/WindowManager.cppm
         private/Window.cppm
 
 )

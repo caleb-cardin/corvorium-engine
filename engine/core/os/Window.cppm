@@ -14,9 +14,6 @@ namespace Corvorium::OS {
 class WindowManager;
 export class Window;
 
-using WindowFramebufferResizeCallbackFn = void(*)(u32 Width, u32 Height, void* pData);
-using WindowCloseCallbackFn = void(*)(Window* Window, void* pData);
-
 export struct WindowFramebufferResizeEvent;
 export struct WindowCloseEvent;
 
@@ -43,7 +40,6 @@ public:
     }
 
     [[nodiscard]] bool ShouldClose() const { return glfwWindowShouldClose(pWindow); }
-    static void PollEvents() { glfwPollEvents(); }
 
     [[nodiscard]] WindowManager* GetManager() const { return Manager; }
     [[nodiscard]] Handle_t GetHandle() const { return Handle; }
@@ -84,10 +80,12 @@ private:
         pWindow = glfwCreateWindow(static_cast<i32>(Width), static_cast<i32>(Height), Title, nullptr, nullptr);
         glfwSetWindowUserPointer(pWindow, this);
         glfwSetFramebufferSizeCallback(pWindow, Window::FramebufferResizeCallback_Internal);
+        glfwSetKeyCallback(pWindow, Window::KeyCallback_Internal);
     }
 
     static void FramebufferResizeCallback_Internal(GLFWwindow* WindowRaw, i32 Width, i32 Height);
     static void CloseCallback_Internal(GLFWwindow* WindowRaw);
+    static void KeyCallback_Internal(GLFWwindow* WindowRaw, i32 Key, i32 Scancode, i32 Action, i32 Mods);
 
     void SetWindowCloseCallbackFn(Internal::WindowCloseCallback Fn) { glfwSetWindowCloseCallback(pWindow, Fn); }
 };

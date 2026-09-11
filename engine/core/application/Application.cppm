@@ -90,7 +90,7 @@ void Application::Run()
 
     while (!WindowManager->IsWindowClosed(MainWindowHandle))
     {
-        OS::Window::PollEvents();
+        OS::WindowManager::PollEvents();
 
         if (!WindowManager->IsWindowClosed(MainWindowHandle) &&
             Rendering->BeginFrame(MainWindowHandle) == Rendering::RenderError::Success)

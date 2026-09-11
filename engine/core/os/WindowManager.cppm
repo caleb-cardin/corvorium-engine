@@ -1,14 +1,14 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 #include "CorvoriumApi.h"
-#include "common/Assert.hpp"
 
-#include "GLFW/glfw3.h"
 #include "EASTL/hash_map.h"
 #include "EASTL/unique_ptr.h"
 
+#include "GLFW/glfw3.h"
 export module OS:WindowManager;
 import :Window;
+import :Input;
 import Event;
 
 namespace Corvorium::OS {
@@ -18,70 +18,39 @@ export class CRVM_API WindowManager {
 public:
     WindowManager() = delete;
 
-    WindowManager(Event::GlobalEventBus* InEventBus)
-        : EventBus{InEventBus}
-        , Windows{}
-    {
-        CRVM_ASSERT(EventBus);
-        if (glfwInit())
-        {
-            Initialized = true;
-        }
-    }
+    explicit WindowManager(Event::GlobalEventBus* InEventBus);
 
-    ~WindowManager()
-    {
-        Windows.clear();
-        glfwTerminate();
-    }
+    ~WindowManager();
 
     WindowManager(const WindowManager&) = delete;
     WindowManager(WindowManager&&) = delete;
     WindowManager& operator=(const WindowManager&) = delete;
     WindowManager& operator=(WindowManager&&) = delete;
 
-    [[nodiscard]] bool IsInitialized() const
-    {
-        return Initialized;
-    }
+    [[nodiscard]] bool IsInitialized() const {return Initialized;}
+
+    static void PollEvents() { glfwPollEvents(); }
 
     bool IsWindowClosed(const WindowHandle Handle) { return !Windows.contains(Handle); }
 
-    WindowHandle NewWindow(u32 Width, u32 Height, const char* Title)
-    {
-        WindowCreateParams Params{.Manager = this, .Width = Width, .Height = Height, .Title = Title};
-        auto window = eastl::unique_ptr<Window>(new Window(Params));
-        auto [it, success] = Windows.try_emplace(window->GetHandle(), eastl::move(window));
-        if (success)
-        {
-            it->second->SetWindowCloseCallbackFn(WindowCloseCallback);
-            return it->first;
-        }
-        return {};
-    }
+    WindowHandle NewWindow(u32 Width, u32 Height, const char* Title);
+    Window* GetWindow(const WindowHandle& Handle);
+    void UnregisterWindow(const WindowHandle& Handle);
 
-    Window* GetWindow(const WindowHandle& Handle)
-    {
-        auto it = Windows.find(Handle);
-        if (it != Windows.end())
-        {
-            return it->second.get();
-        }
-        return nullptr;
-    }
+private:
+    friend class Window;
+    Event::GlobalEventBus* EventBus{nullptr};
+    eastl::hash_map<WindowHandle, eastl::unique_ptr<Window>, HandleHash> Windows{};
+    Input::InputState InputState{};
 
-    void UnregisterWindow(const WindowHandle& Handle)
-    {
-        Windows.erase(Handle);
-    }
+    bool Initialized{false};
 
     [[nodiscard]] Event::GlobalEventBus* GetEventHandler() const { return EventBus; }
 
-private:
-    Event::GlobalEventBus* EventBus{nullptr};
-    eastl::hash_map<WindowHandle, eastl::unique_ptr<Window>, HandleHash> Windows{};
+    void UpdateKeyState(Input::Key Key, Input::KeyStateFlags StateFlags, Input::KeyModFlags ModFlags);
+    void UpdateFnKeyState(Input::FnKey Key, Input::KeyStateFlags StateFlags, Input::KeyModFlags ModFlags);
+    void UpdateMouseButtonState(Input::MouseButton Button, Input::KeyStateFlags StateFlags, Input::KeyModFlags ModFlags);
 
-    bool Initialized{false};
 };
 
 void WindowCloseCallback(GLFWwindow* WindowRaw)
