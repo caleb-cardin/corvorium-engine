@@ -6,7 +6,7 @@ module;
 module OS:InputConversionHelpers;
 import :InputTypes;
 
-namespace Corvorium::Input::Internal {
+namespace Corvorium::OS::Internal {
 
 static_assert(static_cast<u8>(KeyModFlagBits::Shift) == static_cast<u8>(GLFW_MOD_SHIFT));
 static_assert(static_cast<u8>(KeyModFlagBits::Ctrl) == static_cast<u8>(GLFW_MOD_CONTROL));
@@ -313,6 +313,28 @@ FnKey FromGLFWFnKey(GLFWKeyType Key)
     }
     }
 }
+
+using GLFWMouseButtonType = decltype(GLFW_MOUSE_BUTTON_1);
+MouseButton FromGLFWMouseButton(GLFWMouseButtonType Button)
+{
+    switch (Button)
+    {
+    case GLFW_MOUSE_BUTTON_1: return MouseButton::Mb1;
+    case GLFW_MOUSE_BUTTON_2: return MouseButton::Mb2;
+    case GLFW_MOUSE_BUTTON_3: return MouseButton::Mb3;
+    case GLFW_MOUSE_BUTTON_4: return MouseButton::Mb4;
+    case GLFW_MOUSE_BUTTON_5: return MouseButton::Mb5;
+    case GLFW_MOUSE_BUTTON_6: return MouseButton::Mb6;
+    case GLFW_MOUSE_BUTTON_7: return MouseButton::Mb7;
+    case GLFW_MOUSE_BUTTON_8: return MouseButton::Mb8;
+    default:
+    {
+        CRVM_ASSERT_MSG(false, "Unhandled key type!");
+        return MouseButton::COUNT;
+    }
+    }
+}
+
 using GLFWStateType = decltype(GLFW_PRESS);
 KeyStateFlags FromGLFWState(GLFWStateType State)
 {
@@ -390,11 +412,28 @@ const char* ToString(Key InKey)
     case Key::Equal: return "Equal";
     case Key::World1: return "World1";
     case Key::World2: return "World2";
-    case Key::COUNT:
-        [[fallthrough]];
     default:
         return "";
     }
+}
+
+const char* ToString(MouseButton InButton)
+{
+    switch (InButton) {
+    case MouseButton::Mb1: return "Mb1";
+    case MouseButton::Mb2: return "Mb2";
+    case MouseButton::Mb3: return "Mb3";
+    case MouseButton::Mb4: return "Mb4";
+    case MouseButton::Mb5: return "Mb5";
+    case MouseButton::Mb6: return "Mb6";
+    case MouseButton::Mb7: return "Mb7";
+    case MouseButton::Mb8: return "Mb8";
+    default:
+    {
+        return "";
+    }
+    }
+
 }
 
 }

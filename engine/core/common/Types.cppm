@@ -104,7 +104,8 @@ public:
     Auto(const Auto& Other) = default;
     Auto& operator=(const Auto& Other) = default;
 
-    Auto(Auto&& Other) noexcept : Pointer{Other.Pointer}
+    Auto(Auto&& Other) noexcept
+        : Pointer{Other.Pointer}
     {
         Other.Pointer = nullptr;
     }
@@ -116,8 +117,8 @@ public:
         return *this;
     }
 
-    Ptr operator->() { return Pointer; }
-    Ptr operator->() const { return Pointer; }
+    inline Ptr operator->() { return Pointer; }
+    inline Ptr operator->() const { return Pointer; }
 
     inline operator Ptr() const { return Pointer; }
 

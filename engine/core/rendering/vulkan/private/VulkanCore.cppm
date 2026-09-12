@@ -657,6 +657,7 @@ bool VulkanCore::HandleFramebufferResized(const OS::WindowFramebufferResizeEvent
 
 bool VulkanCore::HandleWindowClosed(const OS::WindowCloseEvent& Event)
 {
+    Device.waitIdle();
     if (Swapchains.contains(Event.Window))
     {
         Swapchains.erase(Event.Window);

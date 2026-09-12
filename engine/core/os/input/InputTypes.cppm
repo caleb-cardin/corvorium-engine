@@ -7,7 +7,7 @@ export module OS:InputTypes;
 import Flags;
 
 namespace Corvorium {
-export namespace Input {
+export namespace OS {
 enum class KeyStateFlagBits : u8 {
     None = 0,
     Pressed FLAG_BIT(0),
@@ -153,12 +153,12 @@ enum class GamepadAxis : u8 {
 };
 }
 
-DECLARE_FLAG_TYPE_NS(KeyStateFlags, Input::KeyStateFlagBits, Input)
-DECLARE_FLAG_TYPE_NS(KeyModFlags, Input::KeyModFlagBits, Input)
+DECLARE_FLAG_TYPE_NS(KeyStateFlags, OS::KeyStateFlagBits, OS)
+DECLARE_FLAG_TYPE_NS(KeyModFlags, OS::KeyModFlagBits, OS)
 
-namespace Input {
+namespace OS {
 
-bool WasUpdated(KeyStateFlags OldState, KeyStateFlags NewState)
+inline bool WasUpdated(KeyStateFlags OldState, KeyStateFlags NewState)
 {
     return (OldState & KeyStateFlagBits::ActiveMask) ^ (NewState & KeyStateFlagBits::ActiveMask);
 }

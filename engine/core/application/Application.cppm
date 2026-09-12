@@ -32,7 +32,7 @@ private:
     eastl::string Name;
     Log::Logger AppLogger;
     eastl::unique_ptr<Event::GlobalEventBus> EventBus{nullptr};
-    eastl::unique_ptr<OS::WindowManager> WindowManager{nullptr};
+    eastl::unique_ptr<OS::OSSubsystem> OSSubsys{nullptr};
     eastl::unique_ptr<Rendering::IRenderCore> Rendering{nullptr};
     eastl::unique_ptr<VFS::VirtualFileSystem> FileSystem{nullptr};
 
@@ -45,18 +45,19 @@ Application::Application(eastl::string&& AppName)
     : Name{eastl::move(AppName)}
     , AppLogger{Name}
     , EventBus{eastl::make_unique<Event::GlobalEventBus>()}
-    , WindowManager{eastl::make_unique<OS::WindowManager>(EventBus.get())}
+    , OSSubsys{eastl::make_unique<OS::OSSubsystem>(EventBus.get())}
     , Rendering{Rendering::IRenderCore::CreateRenderCore(Rendering::RenderingAPI::Vulkan)}
     , FileSystem{eastl::make_unique<VFS::VirtualFileSystem>()}
 {
-    MainWindowHandle = WindowManager->NewWindow(1600, 900, Name.c_str());
+    auto* windowManager = OSSubsys->GetWindowManager();
+    MainWindowHandle = windowManager->NewWindow(1600, 900, Name.c_str());
     if (MainWindowHandle == OS::WindowHandle::kInvalidHandle)
     {
         Rendering.reset();
         return;
     }
 
-    if (Rendering->Initialize(EventBus.get(), WindowManager->GetWindow(MainWindowHandle), FileSystem.get()) != Rendering::RenderError::Success)
+    if (Rendering->Initialize(EventBus.get(), windowManager->GetWindow(MainWindowHandle), FileSystem.get()) != Rendering::RenderError::Success)
     {
         return;
     }
@@ -88,11 +89,11 @@ void Application::Run()
     Rendering::ResultValue<Rendering::PipelineHandle> pipelineRes = Rendering->CreatePipeline(graphicsParams);
     if (!pipelineRes.has_value()) return;
 
-    while (!WindowManager->IsWindowClosed(MainWindowHandle))
+    while (!OSSubsys->GetWindowManager()->IsWindowClosed(MainWindowHandle))
     {
         OS::WindowManager::PollEvents();
 
-        if (!WindowManager->IsWindowClosed(MainWindowHandle) &&
+        if (!OSSubsys->GetWindowManager()->IsWindowClosed(MainWindowHandle) &&
             Rendering->BeginFrame(MainWindowHandle) == Rendering::RenderError::Success)
         {
             auto cb = Rendering->AllocateCommandBuffer(MainWindowHandle, 0);

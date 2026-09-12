@@ -6,10 +6,14 @@ module;
 
 #include "GLFW/glfw3.h"
 export module OS:Input;
-import :InputTypes;
-import :InputConversionHelpers;
+export import :InputTypes;
 
-namespace Corvorium::Input {
+namespace Corvorium::OS {
+
+struct CursorPosition {
+    f64 X{0.};
+    f64 Y{0.};
+};
 
 struct KeyState {
     KeyStateFlags State{};
