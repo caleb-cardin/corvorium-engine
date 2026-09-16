@@ -15,6 +15,7 @@ if (Vulkan_FOUND)
     )
     target_link_libraries(VulkanCppModule PUBLIC Vulkan::Vulkan)
     target_compile_definitions(VulkanCppModule PRIVATE
+            VULKAN_HPP_NO_SETTERS
             VULKAN_HPP_NO_SMART_HANDLE
             VULKAN_HPP_NO_EXCEPTIONS
             VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)

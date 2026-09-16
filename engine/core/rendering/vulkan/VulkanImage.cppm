@@ -22,7 +22,6 @@ struct ImageCreateParams {
 
 class VulkanImage {
 public:
-    VulkanImage() = delete;
 
     static ResultValue<VulkanImage> Create(const ImageCreateParams& Params);
 
@@ -38,12 +37,21 @@ public:
     [[nodiscard]] vk::ImageView GetImageView() const { return ImageView; }
     [[nodiscard]] VmaAllocation GetAllocation() const { return Allocation; }
 
+    [[nodiscard]] vk::Extent3D GetExtent() const {return Extent;}
+    [[nodiscard]] vk::Format GetFormat() const {return Format;}
+
+    [[nodiscard]] vk::Result CopyFromMemory(const ByteView& Data, u64 Offset = 0);
+    [[nodiscard]] vk::Result CopyToMemory(ByteView& Data, u64 Offset = 0);
+
 private:
     Auto<VulkanCore*> Core{nullptr};
     Auto<vk::Image> Image{nullptr};
     Auto<vk::ImageView> ImageView{nullptr};
     Auto<VmaAllocation> Allocation{nullptr};
+    VkDeviceSize AllocationOffset{};
+    vk::Extent3D Extent{};
+    vk::Format Format{};
 
-    VulkanImage(VulkanCore* Core, vk::Image Image, vk::ImageView View, VmaAllocation Alloc);
+    VulkanImage() = default;
 };
 }

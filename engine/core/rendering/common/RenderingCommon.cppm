@@ -9,8 +9,38 @@ export module RenderingCommon;
 import CommonTypes;
 import Flags;
 
-namespace Corvorium::Rendering {
-export enum class ShaderStageFlagBits : u32 {
+export import :Primitives;
+
+namespace Corvorium {
+namespace Rendering {
+export struct CRVM_API Size2D {
+    u32 X;
+    u32 Y;
+};
+
+export struct CRVM_API Size3D {
+    u32 X;
+    u32 Y;
+    u32 Z;
+};
+
+export enum class ImageUsageFlagBits : u8 {
+    None = 0,
+    ColorAttachment FLAG_BIT(0),
+    DepthStencilAttachment FLAG_BIT(1),
+    ShaderResource FLAG_BIT(2),
+    Storage FLAG_BIT(3),
+    TransferDst FLAG_BIT(4),
+    TransferSrc FLAG_BIT(5),
+
+    TransferMask = TransferDst | TransferSrc
+};
+}
+
+DECLARE_FLAG_TYPE_NS(ImageUsageFlags, Rendering::ImageUsageFlagBits, Rendering);
+
+namespace Rendering {
+export enum class ShaderStageFlagBits : u16 {
     None = 0,
 
     Vertex FLAG_BIT(0),
@@ -33,11 +63,9 @@ export enum class ShaderStageFlagBits : u32 {
 };
 }
 
-namespace Corvorium {
 DECLARE_FLAG_TYPE_NS(ShaderStageFlags, Rendering::ShaderStageFlagBits, Rendering)
-}
 
-namespace Corvorium::Rendering {
+namespace Rendering {
 export enum class ShaderResourceType {
     Unknown,
     // read only constant buffer
@@ -82,32 +110,50 @@ export struct CRVM_API ShaderPushConstantEntry {
     ShaderStageFlags Stage{ShaderStageFlagBits::None};
 };
 
+
+export struct alignas(4) CRVM_API Format {
+    // The following enums use underlying values to decode into an indexed array.
+    // If any of the following values, the conversion function(s) must also be changed.
+
+    enum class ComponentCount : u8 {
+        e1 = 1,
+        e2 = 2,
+        e3 = 3,
+        e4 = 4,
+        Unknown = static_cast<u8>(~0x0),
+    } Count{ComponentCount::Unknown};
+    enum class ComponentSize : u8 {
+        e8 = 8,
+        e16 = 16,
+        e32 = 32,
+        e64 = 64,
+        Unknown = static_cast<u8>(~0x0),
+    } Size{ComponentSize::Unknown};
+    enum class ScalarType : u8 {
+        U = 0, // unsigned int
+        I = 1, // signed int
+        Un = 2, // unsigned norm
+        In = 3, // signed norm
+        Us = 4, // unsigned scaled
+        Is = 5, // signed scaled
+        F = 6, // float
+        Unknown = static_cast<u8>(~0x0),
+    } Type{ScalarType::Unknown};
+};
+
+export enum class SemanticType : u8 {
+    Position,
+    Normal,
+    TextureCoord,
+    Color,
+};
+
 export struct CRVM_API VertexAttributeEntry {
-    struct Format {
-        u8 ComponentCount;
-        u8 ComponentSize;
-
-        enum class ScalarType : u8 {
-            Unknown,
-            Int32,
-            UInt32,
-            Int64,
-            UInt64,
-            Float32,
-            Float64
-        } Type;
-    };
-
-    enum class SemanticType : u8 {
-        Position,
-        Normal,
-        TextureCoord,
-        Color,
-    };
-
     u32 Location{};
     Format Format{};
     SemanticType Semantic{};
     u32 SemanticIndex{};
 };
+
+}
 }

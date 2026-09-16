@@ -100,7 +100,7 @@ public:
     GlobalEventBus& operator=(GlobalEventBus&&) noexcept = default;
 
     template<EventType E, typename Callable>
-    [[nodiscard]] EventRegisterTag Subscribe(Callable&& CallbackFn, GlobalEventCategory Category)
+    EventRegisterTag Subscribe(Callable&& CallbackFn, GlobalEventCategory Category)
     {
         CRVM_ASSERT(Category != GlobalEventCategory::LAYER_COUNT);
         constexpr u64 hashIndex = E::EventId;

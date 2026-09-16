@@ -14,7 +14,7 @@ ResultValue<VulkanPipeline> VulkanPipeline::Create(const VulkanGraphicsPipelineC
 {
     CRVM_ASSERT(Params.Core);
     CRVM_ASSERT(Params.ShaderCache);
-    CRVM_ASSERT(Params.External.Module != ShaderModuleHandle::kInvalidHandle);
+    CRVM_ASSERT(Params.External.Module != ShaderHandle::kInvalidHandle);
 
     const VulkanShader* shader = Params.ShaderCache->GetShader(Params.External.Module);
     CRVM_ASSERT(shader);

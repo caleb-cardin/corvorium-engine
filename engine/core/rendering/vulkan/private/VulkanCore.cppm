@@ -5,6 +5,7 @@ module;
 
 #include "EASTL/hash_map.h"
 #include "EASTL/string.h"
+#include "EASTL/span.h"
 #include "EASTL/unique_ptr.h"
 #include "EASTL/variant.h"
 
@@ -200,7 +201,7 @@ RenderError VulkanCore::EndFrame(OS::WindowHandle Window)
     return RenderError::Success;
 }
 
-ResultValue<ShaderModuleHandle> VulkanCore::CreateShaderModule(const eastl::string& Name)
+ResultValue<ShaderHandle> VulkanCore::ShaderCreate(const eastl::string& Name)
 {
     auto result = ShaderCache->GetOrCreateShader(Name);
     if (result.has_value())
@@ -210,7 +211,7 @@ ResultValue<ShaderModuleHandle> VulkanCore::CreateShaderModule(const eastl::stri
     return ResultError(RenderError::InternalError);
 }
 
-ResultValue<PipelineHandle> VulkanCore::CreatePipeline(const GraphicsPipelineCreateParams& Params)
+ResultValue<PipelineHandle> VulkanCore::PipelineCreate(const GraphicsPipelineCreateParams& Params)
 {
     VulkanGraphicsPipelineCreateParams internalParams{};
     internalParams.Core = this;
@@ -227,6 +228,58 @@ ResultValue<PipelineHandle> VulkanCore::CreatePipeline(const GraphicsPipelineCre
     return it->second.GetHandle();
 }
 
+ResultValue<ImageHandle> VulkanCore::ImageCreate(Size2D Size, Format Format, ImageUsageFlags Usage)
+{
+    return ImageCreate(Size3D{Size.X, Size.Y, 1}, Format, Usage);
+}
+
+ResultValue<ImageHandle> VulkanCore::ImageCreate(Size3D Size, Format Format, ImageUsageFlags Usage)
+{
+    ImageCreateParams params{};
+    params.Core = this;
+    params.Format = Util::ToVulkanType(Format);
+    params.Usage = Util::ToVulkanType(Usage);
+    params.Extent = Util::ToVulkanType(Size);
+
+    eastl::array<u32, 2> queueFamilies = {GraphicsQueue.FamilyIndex, TransferQueue.FamilyIndex};
+    params.QueueFamilies = Usage & ImageUsageFlagBits::TransferMask
+                               ? queueFamilies
+                               : eastl::span<u32>{queueFamilies.data(), 1};
+
+    auto imgResult = VulkanImage::Create(params);
+    if (!imgResult.has_value()) return ResultError(imgResult.error());
+
+    auto handle = ImageHandle::New();
+    auto [it, success] = Images.try_emplace(handle, eastl::move(imgResult.value()));
+    CRVM_ASSERT_MSG(success, "Rendering internal error when creating image");
+
+    return handle;
+}
+
+RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, void* Data, const Format DataFormat, const u32 Size, const u32 Offset)
+{
+    if (Images.contains(Image))
+    {
+        VulkanImage& image = Images[Image];
+        const vk::Format format = Util::ToVulkanType(DataFormat);
+        if (format != vk::Format::eUndefined && format != image.GetFormat())
+            CRVM_LOG(VulkanLogger, kWarning, "Filling an image with format mismatch.");
+        u8* dataBegin = reinterpret_cast<u8*>(Data);
+        vk::Result res = image.CopyFromMemory(ByteView{dataBegin, dataBegin + Size}, Offset);
+    }
+    return RenderError::ResourceNotFound;
+}
+
+RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, const eastl::span<Color> Colors, const u32 Offset)
+{
+    static constexpr Format kStandardColorFormat{
+        .Count = Format::ComponentCount::e4,
+        .Size = Format::ComponentSize::e8,
+        .Type = Format::ScalarType::U
+    };
+    return ImageFillFromMemory(Image, Colors.data(), kStandardColorFormat, Colors.size_bytes(), Offset);
+}
+
 const VulkanPipeline* VulkanCore::FindPipeline(PipelineHandle Pipeline)
 {
     auto it = Pipelines.find(Pipeline);
@@ -239,7 +292,7 @@ const VulkanPipeline* VulkanCore::FindPipeline(PipelineHandle Pipeline)
 
 bool VulkanCore::InitInstance()
 {
-    vk::detail::defaultDispatchLoaderDynamic.init();
+    VulkanDispatch.init();
     vk::ApplicationInfo appInfo;
     appInfo.apiVersion = vk::ApiVersion14;
     appInfo.pApplicationName = ""; // TODO
@@ -287,7 +340,7 @@ bool VulkanCore::InitInstance()
     const vk::ResultValue<vk::Instance> result = vk::createInstance(createInfo);
     CRVM_LOG_RETURN_IF(!result.has_value(), false, VulkanLogger, kError, "Failed to create Instance.");
     Instance = result.value;
-    vk::detail::defaultDispatchLoaderDynamic.init(Instance);
+    VulkanDispatch.init(Instance);
 
     vk::DebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
     debugMessengerInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
@@ -544,7 +597,7 @@ bool VulkanCore::InitDevice()
     {
         return false;
     }
-    vk::detail::defaultDispatchLoaderDynamic.init(Device);
+    VulkanDispatch.init(Device);
 
     Device.getQueue(queueInfos[0].FamilyIndex, queueInfos[0].QueueIndex, &GraphicsQueue.Queue);
     Device.getQueue(queueInfos[1].FamilyIndex, queueInfos[1].QueueIndex, &TransferQueue.Queue);
@@ -618,7 +671,8 @@ bool VulkanCore::InitPipelineCache()
 
 void VulkanCore::Teardown()
 {
-    Device.waitIdle();
+    const vk::Result res = Device.waitIdle();
+    CRVM_ASSERT(res == vk::Result::eSuccess);
 
     Pipelines.clear();
     ShaderCache.reset();
@@ -657,7 +711,8 @@ bool VulkanCore::HandleFramebufferResized(const OS::WindowFramebufferResizeEvent
 
 bool VulkanCore::HandleWindowClosed(const OS::WindowCloseEvent& Event)
 {
-    Device.waitIdle();
+    const vk::Result res = Device.waitIdle();
+    CRVM_ASSERT(res == vk::Result::eSuccess);
     if (Swapchains.contains(Event.Window))
     {
         Swapchains.erase(Event.Window);

@@ -20,9 +20,7 @@ import OS;
 import :Types;
 import :VulkanUtils;
 
-/* Slang shader files are considered to always consists of set of shaders composing complete pipelines.
- * TODO: Enforce and check slang file -> complete pipeline
- */
+// Slang shader files are considered to always consists of set of shaders composing complete pipelines.
 
 namespace Corvorium::Rendering::Vulkan {
 struct VulkanShader {
@@ -32,24 +30,18 @@ struct VulkanShader {
     auto operator=(const VulkanShader& Other) -> VulkanShader& = delete;
     auto operator=(VulkanShader&& Other) noexcept -> VulkanShader& = default;
 
-    struct DescriptorBinding {
-        u32 Set;
-        u32 Binding;
-        eastl::optional<u32> Size;
-    };
-
     struct EntryPoint {
         eastl::string Name;
         ShaderStageFlagBits Stage;
     };
 
 
-    ShaderModuleHandle Handle{};
+    ShaderHandle Handle{};
     eastl::vector<EntryPoint> EntryPoints{};
     eastl::optional<eastl::vector<Rendering::VertexAttributeEntry>> VertexAttributes{};
     Auto<vk::ShaderModule> Module{nullptr};
     Auto<vk::PipelineLayout> Layout{nullptr};
-    eastl::string_hash_map<DescriptorBinding> BindingMap{};
+    eastl::string_hash_map<ShaderBindingEntry> BindingMap{};
     eastl::vector<vk::DescriptorSetLayout> DescriptorLayouts{};
     eastl::vector<vk::PushConstantRange> PushConstantRanges{};
 };
@@ -71,18 +63,20 @@ public:
 
     ResultValue<const VulkanShader*> GetOrCreateShader(const eastl::string& ShaderPath,
                                                        const ShaderCompiler::CompileContext* Context = nullptr);
-    const VulkanShader* GetShader(ShaderModuleHandle Shader);
+    const VulkanShader* GetShader(ShaderHandle Shader);
 
 private:
     vk::Device Device{nullptr};
     FileSystem::IFileProvider* FileProvider{nullptr};
     eastl::unique_ptr<ShaderCompiler::CompileContext> DefaultCompileContext{nullptr};
 
-    eastl::string_hash_map<ShaderModuleHandle> FileToHandleMap{};
-    eastl::vector_map<ShaderModuleHandle, VulkanShader> HandleToShaderMap{};
+    eastl::string_hash_map<ShaderHandle> FileToHandleMap{};
+    eastl::vector_map<ShaderHandle, VulkanShader> HandleToShaderMap{};
 
     void CreateDescriptorData(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
                               eastl::vector<vk::DescriptorSetLayout>& OutLayouts);
+    void CreateDescriptorMappings(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
+                                  eastl::string_hash_map<ShaderBindingEntry>& BindingMap);
 
     void TeardownShader(VulkanShader& Shader);
 };
@@ -119,7 +113,7 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
 {
     if (FileToHandleMap.contains(ShaderPath.c_str()))
     {
-        ShaderModuleHandle handle = FileToHandleMap[ShaderPath.c_str()];
+        ShaderHandle handle = FileToHandleMap[ShaderPath.c_str()];
         CRVM_ASSERT(handle);
         return GetShader(handle);
     }
@@ -153,7 +147,7 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
                        "Failed to create shader module.");
 
     VulkanShader shader{};
-    shader.Handle = ShaderModuleHandle::New();
+    shader.Handle = ShaderHandle::New();
     shader.Module = moduleResult.value;
 
     for (const auto& entry: program.GetReflection().EntryPoints)
@@ -195,7 +189,7 @@ ResultValue<const VulkanShader*> VulkanShaderCache::GetOrCreateShader(const east
     return &shaderElement.second;
 }
 
-const VulkanShader* VulkanShaderCache::GetShader(ShaderModuleHandle Shader)
+const VulkanShader* VulkanShaderCache::GetShader(ShaderHandle Shader)
 {
     if (HandleToShaderMap.contains(Shader))
     {
@@ -204,7 +198,7 @@ const VulkanShader* VulkanShaderCache::GetShader(ShaderModuleHandle Shader)
     return nullptr;
 }
 
-void VulkanShaderCache::CreateDescriptorData(const eastl::vector<Rendering::ShaderBindingEntry>& Bindings,
+void VulkanShaderCache::CreateDescriptorData(const eastl::vector<ShaderBindingEntry>& Bindings,
                                              eastl::vector<vk::DescriptorSetLayout>& OutLayouts)
 {
     if (Bindings.empty()) return;
@@ -234,6 +228,17 @@ void VulkanShaderCache::CreateDescriptorData(const eastl::vector<Rendering::Shad
         auto result = Device.createDescriptorSetLayout(setLayoutInfo);
         CRVM_LOG_RETURN_IF(!result.has_value(), /*void*/;, VulkanLogger, kError, "Failed to create shader descriptors.");
         OutLayouts.emplace_back(result.value);
+    }
+}
+
+void VulkanShaderCache::CreateDescriptorMappings(const eastl::vector<ShaderBindingEntry>& Bindings,
+                                                 eastl::string_hash_map<ShaderBindingEntry>& BindingMap)
+{
+    for (const auto& bind : Bindings)
+    {
+        ShaderBindingEntry newBind = bind;
+        auto [it, success] = BindingMap.try_emplace(newBind.Name.c_str(), eastl::move(newBind));
+        CRVM_ASSERT(success);
     }
 }
 

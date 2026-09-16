@@ -16,4 +16,5 @@ target_sources(CorvoriumEngine
 target_include_directories(CorvoriumEngine PUBLIC ./include PRIVATE ./private)
 
 target_link_libraries(CorvoriumEngine PRIVATE
-        spdlog::spdlog)
+        spdlog::spdlog
+        EASTL)

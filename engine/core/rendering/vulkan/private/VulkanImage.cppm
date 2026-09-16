@@ -20,7 +20,7 @@ VmaAllocationCreateFlags GetOptimalCreateFlags(vk::ImageUsageFlags Usage)
     return outFlags;
 }
 
-VmaMemoryUsage GetOptimalUsage(vk::ImageUsageFlags Usage)
+VmaMemoryUsage GetOptimalUsage(const vk::ImageUsageFlags Usage)
 {
     VmaMemoryUsage outUsage{VMA_MEMORY_USAGE_AUTO};
     if (Usage & vk::ImageUsageFlagBits::eColorAttachment || Usage & vk::ImageUsageFlagBits::eDepthStencilAttachment)
@@ -36,7 +36,7 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
 
     vk::ImageCreateInfo imageInfo;
     // TODO : Image creation params
-    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.imageType = Params.Extent.depth == 1 ? vk::ImageType::e2D : vk::ImageType::e3D;
     imageInfo.format = Params.Format;
     imageInfo.extent = Params.Extent;
     imageInfo.mipLevels = 1;
@@ -65,13 +65,13 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
 
     vk::Image image;
     VmaAllocation allocation;
-    [[maybe_unused]] VmaAllocationInfo allocInfo; {
+    VmaAllocationInfo info; {
         VkResult res = vmaCreateImage(allocator,
                                       reinterpret_cast<VkImageCreateInfo*>(&imageInfo),
                                       &allocCreateInfo,
                                       reinterpret_cast<VkImage*>(&image),
                                       &allocation,
-                                      &allocInfo);
+                                      &info);
         CRVM_LOG_RETURN_IF(res != VK_SUCCESS,
                            ResultError(RenderError::InitializationFailed),
                            VulkanLogger,
@@ -103,7 +103,15 @@ ResultValue<VulkanImage> VulkanImage::Create(const ImageCreateParams& Params)
         view = result.value;
     }
 
-    return VulkanImage(Params.Core, image, view, allocation);
+    VulkanImage newImage{};
+    newImage.Core = Params.Core;
+    newImage.Image = image;
+    newImage.ImageView = view;
+    newImage.Allocation = allocation;
+    newImage.AllocationOffset = info.offset;
+    newImage.Extent = Params.Extent;
+    newImage.Format = Params.Format;
+    return newImage;
 }
 
 VulkanImage::~VulkanImage()
@@ -118,10 +126,26 @@ VulkanImage::~VulkanImage()
     }
 }
 
-VulkanImage::VulkanImage(VulkanCore* Core, vk::Image Image, vk::ImageView View, VmaAllocation Alloc)
-    : Core{Core}
-    , Image{Image}
-    , ImageView{View}
-    , Allocation{Alloc}
-{}
+vk::Result VulkanImage::CopyFromMemory(const ByteView& Data, const u64 Offset)
+{
+    const auto imgBufferSize = Util::GetExtentTotal(Extent);
+    const vk::DeviceSize memSize = Data.size_bytes();
+    CRVM_LOG_RETURN_IF((imgBufferSize - Offset) < memSize,
+                       vk::Result::eErrorUnknown,
+                       VulkanLogger,
+                       kError,
+                       "Attempted to fill image outside image bounds.");
+    return vk::Result{vmaCopyMemoryToAllocation(Core->GetAllocator(), Data.data(), Allocation, AllocationOffset + Offset, memSize)};
+}
+
+vk::Result VulkanImage::CopyToMemory(ByteView& Data, const u64 Offset)
+{
+    const auto imgBufferSize = Util::GetExtentTotal(Extent);
+    CRVM_LOG_RETURN_IF((imgBufferSize - Offset) < Data.size_bytes(),
+                       vk::Result::eErrorUnknown,
+                       VulkanLogger,
+                       kError,
+                       "Attempted to read image outside image bounds.");
+    return vk::Result{vmaCopyAllocationToMemory(Core->GetAllocator(), Allocation, AllocationOffset + Offset, (void*)Data.data(), Data.size_bytes())};
+}
 }

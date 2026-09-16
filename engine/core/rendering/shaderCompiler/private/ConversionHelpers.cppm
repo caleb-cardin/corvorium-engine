@@ -116,25 +116,27 @@ ShaderStageFlagBits FromSlangType(SlangStage InStage)
     }
 }
 
-VertexAttributeEntry::Format::ScalarType FromSlangType(slang::TypeReflection::ScalarType ScalarType)
+Format FromSlangType(slang::TypeReflection::ScalarType ScalarType, u8 Count)
 {
-    using OutScalarType = VertexAttributeEntry::Format::ScalarType;
+    using fst = Format::ScalarType;
+    using fcs = Format::ComponentSize;
+    using fcc = Format::ComponentCount;
     switch (ScalarType)
     {
     case slang::TypeReflection::Int32:
-        return OutScalarType::Int32;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e32, .Type = fst::I};
     case slang::TypeReflection::UInt32:
-        return OutScalarType::UInt32;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e32, .Type = fst::U};
     case slang::TypeReflection::Int64:
-        return OutScalarType::Int64;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e64, .Type = fst::I};
     case slang::TypeReflection::UInt64:
-        return OutScalarType::UInt64;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e64, .Type = fst::U};
     case slang::TypeReflection::Float32:
-        return OutScalarType::Float32;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e32, .Type = fst::F};
     case slang::TypeReflection::Float64:
-        return OutScalarType::Float64;
+        return Format{.Count = static_cast<fcc>(Count), .Size = fcs::e64, .Type = fst::F};
     default:
-        return OutScalarType::Unknown;
+        return {};
     }
 }
 }

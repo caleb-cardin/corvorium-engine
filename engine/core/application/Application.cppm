@@ -2,6 +2,7 @@
 module;
 
 #include "CorvoriumApi.h"
+#include "common/Assert.hpp"
 
 #include "EASTL/string.h"
 #include "EASTL/unique_ptr.h"
@@ -77,7 +78,7 @@ void Application::Run()
                                   / std::filesystem::path("shaders")).string().c_str();
     FileSystem->Mount(physicalPath, "shaders");
 
-    Rendering::ResultValue<Rendering::ShaderModuleHandle> shaderRes = Rendering->CreateShaderModule("shaders://Test.slang");
+    Rendering::ResultValue<Rendering::ShaderHandle> shaderRes = Rendering->ShaderCreate("shaders://Test.slang");
     if (!shaderRes.has_value()) return;
 
     Rendering::GraphicsPipelineCreateParams graphicsParams{};
@@ -86,7 +87,7 @@ void Application::Run()
     graphicsParams.DepthTest = Rendering::DepthTestType::Opaque;
     graphicsParams.Primitive = Rendering::PrimitiveType::TriangleList;
 
-    Rendering::ResultValue<Rendering::PipelineHandle> pipelineRes = Rendering->CreatePipeline(graphicsParams);
+    Rendering::ResultValue<Rendering::PipelineHandle> pipelineRes = Rendering->PipelineCreate(graphicsParams);
     if (!pipelineRes.has_value()) return;
 
     while (!OSSubsys->GetWindowManager()->IsWindowClosed(MainWindowHandle))
@@ -103,10 +104,12 @@ void Application::Run()
                 cb->BindGraphicsPipeline(pipelineRes.value());
                 cb->TESTING_DrawTriangle();
                 cb->EndRendering();
-                cb->End();
+                bool success = cb->End();
+                CRVM_ASSERT(success);
             }
 
-            Rendering->EndFrame(MainWindowHandle);
+            const Rendering::RenderError err = Rendering->EndFrame(MainWindowHandle);
+            CRVM_ASSERT(err == Rendering::RenderError::Success);
         }
     }
 }

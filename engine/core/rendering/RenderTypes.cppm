@@ -32,7 +32,6 @@ using ResultValue = Error::ResultValueType<V, RenderError>;
 
 using ResultError = Error::ResultErrorType<RenderError>;
 
-
 export namespace Internal {
 struct Shader {};
 
@@ -45,7 +44,7 @@ struct Mesh {};
 struct Pipeline {};
 }
 
-export using ShaderModuleHandle = HandleType<Internal::Shader>;
+export using ShaderHandle = HandleType<Internal::Shader>;
 export using BufferHandle = HandleType<Internal::Buffer>;
 export using ImageHandle = HandleType<Internal::Image>;
 export using MeshHandle = HandleType<Internal::Mesh>;
@@ -71,7 +70,7 @@ export enum class ColorBlendType : u8 {
 };
 
 export struct GraphicsPipelineCreateParams {
-    ShaderModuleHandle Module;
+    ShaderHandle Module;
     PrimitiveType Primitive;
     DepthTestType DepthTest;
     ColorBlendType ColorBlend;

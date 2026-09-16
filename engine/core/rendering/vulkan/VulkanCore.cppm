@@ -14,7 +14,7 @@ import :VulkanPipeline;
 import :VulkanShaderCache;
 
 namespace Corvorium::Rendering::Vulkan {
-class VulkanCore : public IRenderCore {
+class VulkanCore final : public IRenderCore {
     struct QueueData {
         u32 FamilyIndex{};
         u32 QueueIndex{};
@@ -24,6 +24,11 @@ class VulkanCore : public IRenderCore {
 
 public:
     VulkanCore() = default;
+
+    // ==================================================================
+    // IRenderCor overridee
+    // ==================================================================
+
     ~VulkanCore() override;
 
     [[nodiscard]] RenderError Initialize(Event::GlobalEventBus* EventHandler,
@@ -38,8 +43,18 @@ public:
     [[nodiscard]] ResultValue<CommandBuffer> AllocateCommandBuffer(OS::WindowHandle Window, i32 Priority) override;
     [[nodiscard]] RenderError EndFrame(OS::WindowHandle Window) override;
 
-    [[nodiscard]] ResultValue<ShaderModuleHandle> CreateShaderModule(const eastl::string& Name) override;
-    [[nodiscard]] ResultValue<PipelineHandle> CreatePipeline(const GraphicsPipelineCreateParams& Params) override;
+    [[nodiscard]] ResultValue<ShaderHandle> ShaderCreate(const eastl::string& Name) override;
+
+    [[nodiscard]] ResultValue<PipelineHandle> PipelineCreate(const GraphicsPipelineCreateParams& Params) override;
+
+    [[nodiscard]] inline ResultValue<ImageHandle> ImageCreate(Size2D Size, Format Format, ImageUsageFlags Usage) override;
+    [[nodiscard]] ResultValue<ImageHandle> ImageCreate(Size3D Size, Format Format, ImageUsageFlags Usage) override;
+    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, void* Data, Format DataFormat, u32 Size, u32 Offset) override;
+    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, eastl::span<Color> Colors, u32 Offset) override;
+
+    // ==================================================================
+    // VulkanCore methods
+    // ==================================================================
 
     [[nodiscard]] vk::Instance GetInstance() const { return Instance; }
     [[nodiscard]] vk::PhysicalDevice GetPhysicalDevice() const { return PhysicalDevice; }
@@ -74,6 +89,8 @@ private:
     eastl::unique_ptr<VulkanShaderCache> ShaderCache{};
 
     eastl::hash_map<PipelineHandle, VulkanPipeline, HandleHash> Pipelines{};
+    //eastl::hash_map<BufferHandle, VulkanBuffer, HandleHash> Buffers{}; TODO : Vulkan buffer
+    eastl::hash_map<ImageHandle, VulkanImage, HandleHash> Images{};
 
     [[nodiscard]] bool InitInstance();
     [[nodiscard]] bool SelectPhysicalDevice();

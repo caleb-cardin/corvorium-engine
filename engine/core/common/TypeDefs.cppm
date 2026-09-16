@@ -1,7 +1,7 @@
 // Copyright © 2026 Caleb Cardin. All rights reserved.
 module;
 
-
+#include "EASTL/span.h"
 export module TypeDefs;
 import std;
 
@@ -26,4 +26,7 @@ concept Boolean = std::is_convertible_v<T, bool>;
 
 using SourceLocation = std::source_location;
 }
+
+using ByteView = eastl::span<u8>;
+
 }

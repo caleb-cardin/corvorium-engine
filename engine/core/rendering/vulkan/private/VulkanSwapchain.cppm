@@ -27,7 +27,8 @@ VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainCreateParams& Params)
         return;
     }
 
-    Initialize(Params);
+    bool initialized = Initialize(Params);
+    CRVM_ASSERT(initialized);
 }
 
 VulkanSwapchain::VulkanSwapchain(vk::SurfaceKHR InSurface)
@@ -125,7 +126,8 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
 {
     // TEMPORARY FIX TODO: Correctly handle swapchain resizing to avoid images destroy-during-use.
     vk::Device device = Core->GetDevice();
-    device.waitIdle();
+    vk::Result res = device.waitIdle();
+    CRVM_ASSERT(res == vk::Result::eSuccess);
 
     ReleaseCommandResources();
 
@@ -155,7 +157,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     vk::PhysicalDeviceSurfaceInfo2KHR surfaceInfo2;
     surfaceInfo2.surface = Surface;
     vk::SurfaceCapabilities2KHR surfaceCaps;
-    vk::Result res = Core->GetPhysicalDevice().getSurfaceCapabilities2KHR(&surfaceInfo2, &surfaceCaps);
+    res = Core->GetPhysicalDevice().getSurfaceCapabilities2KHR(&surfaceInfo2, &surfaceCaps);
     CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, RenderError::InternalError, VulkanLogger, kError, "Failed to get surface capabilities.");
 
     vk::Extent2D extent = surfaceCaps.surfaceCapabilities.currentExtent;
@@ -243,7 +245,7 @@ RenderError VulkanSwapchain::CreateOrRecreateSwapchain()
     params.Format = surfaceInfo.DepthStencilFormat;
     params.QueueFamilies = IsPresentQueueUnique()
                                ? QueueFamilyIndices.QueueFamilies
-                               : eastl::span<u32>(std::begin(QueueFamilyIndices.QueueFamilies), 1);
+                               : eastl::span<u32>(QueueFamilyIndices.QueueFamilies, 1);
     params.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
 
     for (auto& pDepthImage: DepthImages)
@@ -332,19 +334,18 @@ vk::Result VulkanSwapchain::Reset()
     return vk::Result::eSuccess;
 }
 
-vk::Result VulkanSwapchain::ReleaseCommandResources()
+void VulkanSwapchain::ReleaseCommandResources()
 {
     vk::Device device = Core->GetDevice();
     for (auto& cmdPool: FrameCommandPools)
     {
         vk::Result res = device.resetCommandPool(cmdPool, vk::CommandPoolResetFlagBits::eReleaseResources);
-        CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to reset swapchain frame data.");
+        if (res != vk::Result::eSuccess) CRVM_LOG(VulkanLogger, kError, "Failed to reset swapchain frame data.");
     }
     for (auto& cmdList: FrameCommandLists)
     {
         cmdList.CommandBuffers.clear();
     }
-    return vk::Result::eSuccess;
 }
 
 vk::Result VulkanSwapchain::InitializeCommandList()
@@ -400,12 +401,13 @@ vk::Result VulkanSwapchain::InitializeCommandList()
 
     cbBegin.pipelineBarrier2(beginDep);
 
-    cbBegin.end();
+    auto endResult = cbBegin.end();
+    CRVM_LOG_RETURN_IF(endResult != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to end command recording.");
 
     // END
     vk::CommandBuffer cbEnd;
     res = AllocateCommandBuffer(kOrderPriorityMin, cbEnd);
-    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
+    CRVM_LOG_RETURN_IF(res != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to begin command recording.");
     beginResult = cbEnd.begin(beginInfo);
     CRVM_LOG_RETURN_IF(beginResult != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to being command recording.");
 
@@ -431,7 +433,8 @@ vk::Result VulkanSwapchain::InitializeCommandList()
 
     cbEnd.pipelineBarrier2(endDep);
 
-    cbEnd.end();
+    endResult = cbEnd.end();
+    CRVM_LOG_RETURN_IF(endResult != vk::Result::eSuccess, res, VulkanLogger, kError, "Failed to end command recording.");
 
     return vk::Result::eSuccess;
 }

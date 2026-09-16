@@ -16,6 +16,7 @@ module ShaderCompiler:CompileContextImpl;
 import :CompileContext;
 import :ConversionHelpers;
 import :ShaderProgram;
+import Flags;
 
 namespace Corvorium::ShaderCompiler {
 ResultValue<ShaderProgram> CompileContext::Compile(const eastl::string& File) const
@@ -205,15 +206,13 @@ static [[nodiscard]] ShaderCompilerError ProcessVertexAttributes(eastl::vector<R
     vertexAttribute.Location = VariableLayout->getBindingIndex();
 
     slang::TypeLayoutReflection* typeLayout = VariableLayout->getTypeLayout();
-    vertexAttribute.Format.ComponentCount = static_cast<u8>(typeLayout->getRowCount());
-    vertexAttribute.Format.ComponentSize = static_cast<u8>(typeLayout->getColumnCount());
-    vertexAttribute.Format.Type = FromSlangType(typeLayout->getScalarType());
+    vertexAttribute.Format = FromSlangType(typeLayout->getScalarType(), static_cast<u8>(typeLayout->getRowCount()));
 
     eastl::string_view semName = VariableLayout->getSemanticName();
-    if (semName == SHADER_SEMANTIC_NAME_POSITION) vertexAttribute.Semantic = VertexAttributeEntry::SemanticType::Position;
-    else if (semName == SHADER_SEMANTIC_NAME_NORMAL) vertexAttribute.Semantic = VertexAttributeEntry::SemanticType::Normal;
-    else if (semName == SHADER_SEMANTIC_NAME_TEXCOORD) vertexAttribute.Semantic = VertexAttributeEntry::SemanticType::TextureCoord;
-    else if (semName == SHADER_SEMANTIC_NAME_COLOR) vertexAttribute.Semantic = VertexAttributeEntry::SemanticType::Color;
+    if (semName == SHADER_SEMANTIC_NAME_POSITION) vertexAttribute.Semantic = SemanticType::Position;
+    else if (semName == SHADER_SEMANTIC_NAME_NORMAL) vertexAttribute.Semantic = SemanticType::Normal;
+    else if (semName == SHADER_SEMANTIC_NAME_TEXCOORD) vertexAttribute.Semantic = SemanticType::TextureCoord;
+    else if (semName == SHADER_SEMANTIC_NAME_COLOR) vertexAttribute.Semantic = SemanticType::Color;
     else
     {
         CRVM_LOG(ShaderCompilerLogger, kError, "Shader contained undefined semantic vertex attribute.");
