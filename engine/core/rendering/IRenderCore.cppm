@@ -49,7 +49,7 @@ public:
     [[nodiscard]] virtual ResultValue<ImageHandle> ImageCreate(Size2D Size, Format Format, ImageUsageFlags Usage) = 0;
     [[nodiscard]] virtual ResultValue<ImageHandle> ImageCreate(Size3D Size, Format Format, ImageUsageFlags Usage) = 0;
 
-    [[nodiscard]] virtual RenderError ImageFillFromMemory(ImageHandle Image, void* Data, Format DataFormat, u32 Size, u32 Offset = 0) = 0;
-    [[nodiscard]] virtual RenderError ImageFillFromMemory(ImageHandle Image, eastl::span<Color> Colors, u32 Offset = 0) = 0;
+    [[nodiscard]] virtual RenderError ImageFillFromMemory(ImageHandle Image, /*element array*/ void* Data, Format DataFormat, u64 Size, u64 Offset = 0) = 0;
+    [[nodiscard]] virtual RenderError ImageFillFromMemory(ImageHandle Image, eastl::span<Color> Colors, u64 Offset = 0) = 0;
 };
 }

@@ -49,8 +49,8 @@ public:
 
     [[nodiscard]] inline ResultValue<ImageHandle> ImageCreate(Size2D Size, Format Format, ImageUsageFlags Usage) override;
     [[nodiscard]] ResultValue<ImageHandle> ImageCreate(Size3D Size, Format Format, ImageUsageFlags Usage) override;
-    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, void* Data, Format DataFormat, u32 Size, u32 Offset) override;
-    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, eastl::span<Color> Colors, u32 Offset) override;
+    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, void* Data, Format DataFormat, u64 Size, u64 Offset) override;
+    [[nodiscard]] RenderError ImageFillFromMemory(ImageHandle Image, eastl::span<Color> Colors, u64 Offset) override;
 
     // ==================================================================
     // VulkanCore methods

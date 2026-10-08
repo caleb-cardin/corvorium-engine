@@ -256,11 +256,12 @@ ResultValue<ImageHandle> VulkanCore::ImageCreate(Size3D Size, Format Format, Ima
     return handle;
 }
 
-RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, void* Data, const Format DataFormat, const u32 Size, const u32 Offset)
+RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, void* Data, const Format DataFormat, const u64 Size, const u64 Offset)
 {
     if (Images.contains(Image))
     {
-        VulkanImage& image = Images[Image];
+        auto it = Images.find(Image);
+        auto& image = it->second;
         const vk::Format format = Util::ToVulkanType(DataFormat);
         if (format != vk::Format::eUndefined && format != image.GetFormat())
             CRVM_LOG(VulkanLogger, kWarning, "Filling an image with format mismatch.");
@@ -270,7 +271,7 @@ RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, void* Data,
     return RenderError::ResourceNotFound;
 }
 
-RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, const eastl::span<Color> Colors, const u32 Offset)
+RenderError VulkanCore::ImageFillFromMemory(const ImageHandle Image, const eastl::span<Color> Colors, const u64 Offset)
 {
     static constexpr Format kStandardColorFormat{
         .Count = Format::ComponentCount::e4,
@@ -368,8 +369,7 @@ bool VulkanCore::SelectPhysicalDevice()
                        kError,
                        "Failed to initialize device: No GPU found.");
 
-    eastl::vector<vk::PhysicalDevice> physicalDevices;
-    physicalDevices.resize(deviceCount);
+    eastl::vector<vk::PhysicalDevice> physicalDevices{deviceCount};
     res = Instance.enumeratePhysicalDevices(&deviceCount, physicalDevices.data());
 
     eastl::vector<u32> deviceScores(physicalDevices.size(), 0);

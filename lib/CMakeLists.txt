@@ -25,3 +25,18 @@ add_subdirectory(spdlog)
 add_subdirectory(vma)
 
 set(CMAKE_MESSAGE_LOG_LEVEL _saved_message_log_level)
+
+
+# TEST
+add_library(ImGuiTestLib)
+
+target_sources(ImGuiTestLib
+    PUBLIC
+        ./imgui/backends/imgui_impl_vulkan.h
+    PRIVATE
+        ./imgui/backends/imgui_impl_vulkan.cpp
+)
+find_package(Vulkan)
+target_link_libraries(ImGuiTestLib PUBLIC Vulkan::Vulkan imgui)
+target_include_directories(ImGuiTestLib PUBLIC ./imgui)
+
